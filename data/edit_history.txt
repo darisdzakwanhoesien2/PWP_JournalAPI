@@ -1,0 +1,2 @@
+1,1,"This is my first journal entry!","Updated my first journal entry with more details."
+2,2,"Enjoying my coffee in the morning","Added more thoughts on morning routines."

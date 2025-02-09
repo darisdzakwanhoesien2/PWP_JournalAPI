@@ -1,0 +1,3 @@
+1,First Entry,This is my first journal entry!,"happy,reflection",0.85,"positive,joy"
+2,My Morning Thoughts,Enjoying my coffee in the morning,"calm,grateful",0.75,"positive,peaceful"
+3,Workout Log,Had a great gym session today!,"energetic,health",0.9,"positive,excited"

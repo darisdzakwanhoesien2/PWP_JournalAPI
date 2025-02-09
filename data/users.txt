@@ -1,0 +1,3 @@
+alice,alice@example.com,securepass1
+bob,bob@example.com,securepass2
+charlie,charlie@example.com,securepass3
