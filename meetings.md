@@ -20,14 +20,16 @@ The action points were:
 
 
 ## Meeting 2.
-* **DATE:**
-* **ASSISTANTS:**
+* **DATE:** 18th February 2025
+* **ASSISTANTS:** Ivan Sanchez
 
 ### Minutes
-*Summary of what was discussed during the meeting*
+The professor suggested to move to MariaDB or MySQL database instead of current implementation (SQLlite). He mentioned that the Readme.md should be updated each time the implementation is updated, so everyone who does not know the context can run the application on their local PC. He suggested to keep the EditHistory module of the JournalAPI to be optional or on low priority right now. 
 
 ### Action points
-*List here the actions points discussed with assistants*
+- Move to MariaDB or MySQL database instead of current implementation (SQLlite)
+- Readme.md should be updated each time the implementation is updated
+- Keep the EditHistory module of the JournalAPI to be optional or on low priority right now
 
 
 
