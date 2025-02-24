@@ -1,5 +1,5 @@
-from database import db
-from models.journal_entry import JournalEntry
+from extensions import db
+from models import JournalEntry
 from datetime import datetime
 import json
 

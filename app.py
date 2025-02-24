@@ -1,9 +1,9 @@
 from flask import Flask
 from flask_jwt_extended import JWTManager
 from extensions import db
-from user_routes import user_bp
-from journal_entry_routes import journal_entry_bp
-from comment_routes import comment_bp
+from routes.user_routes import user_bp
+from routes.journal_entry_routes import journal_entry_bp
+#from routes.comment_routes import comment_bp
 
 def create_app():
     app = Flask(__name__)
@@ -17,12 +17,10 @@ def create_app():
     # Register blueprints
     app.register_blueprint(user_bp, url_prefix="/users")
     app.register_blueprint(journal_entry_bp, url_prefix="/entries")
-    app.register_blueprint(comment_bp, url_prefix="/comments")
+ #   app.register_blueprint(comment_bp, url_prefix="/comments")
 
     return app
 
 if __name__ == "__main__":
     app = create_app()
-    with app.app_context():
-        db.create_all()
     app.run(debug=True)
