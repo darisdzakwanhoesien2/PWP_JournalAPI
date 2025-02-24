@@ -1,17 +1,23 @@
 from flask import Flask
+from flask_jwt_extended import JWTManager
 from extensions import db
-from models import User, JournalEntry, EditHistory, Comment
+from user_routes import user_bp
+from journal_entry_routes import journal_entry_bp
+from comment_routes import comment_bp
 
 def create_app():
     app = Flask(__name__)
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///journal.db"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["JWT_SECRET_KEY"] = "user123"  # Change this to a secure key in production
 
     db.init_app(app)
+    jwt = JWTManager(app)
 
-    @app.route("/")
-    def home():
-        return {"message": "Welcome to the Journal API"}
+    # Register blueprints
+    app.register_blueprint(user_bp, url_prefix="/users")
+    app.register_blueprint(journal_entry_bp, url_prefix="/entries")
+    app.register_blueprint(comment_bp, url_prefix="/comments")
 
     return app
 
