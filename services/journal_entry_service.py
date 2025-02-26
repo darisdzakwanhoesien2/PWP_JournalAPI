@@ -37,11 +37,6 @@ class JournalEntryService:
         """Retrieve a specific journal entry."""
         entry = db.session.get(JournalEntry, entry_id)  # ✅ Fix for SQLAlchemy 2.0
         return entry.to_dict() if entry else None
-    # @staticmethod
-    # def get_entry(entry_id):
-    #     """Retrieve a specific journal entry."""
-    #     entry = JournalEntry.query.get(entry_id)
-    #     return entry.to_dict() if entry else None  # ✅ Fix: Convert to dict
 
     @staticmethod
     def update_entry(entry_id, title=None, content=None, tags=None):
@@ -68,12 +63,3 @@ class JournalEntryService:
             db.session.commit()
             return True
         return False
-
-    # @staticmethod
-    # def delete_entry(entry_id):
-    #     entry = JournalEntry.query.get(entry_id)
-    #     if entry:
-    #         db.session.delete(entry)
-    #         db.session.commit()
-    #         return True
-    #     return False
