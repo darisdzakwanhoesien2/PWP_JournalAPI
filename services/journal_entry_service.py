@@ -1,6 +1,6 @@
 from extensions import db
 from models import JournalEntry
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 
 class JournalEntryService:
@@ -18,19 +18,30 @@ class JournalEntryService:
             tags=json.dumps(tags),
             sentiment_score=sentiment_score,
             sentiment_tag=json.dumps(sentiment_tag),
-            last_updated=datetime.utcnow()
+            last_updated=datetime.now(timezone.utc) # datetime.utcnow()
         )
         db.session.add(new_entry)
         db.session.commit()
-        return new_entry
+        
+        return {"entry_id": new_entry.id}  # ✅ Return only entry_id
+
 
     @staticmethod
     def get_entries(user_id):
-        return JournalEntry.query.filter_by(user_id=user_id).all()
+        """Retrieve all journal entries for a user."""
+        entries = JournalEntry.query.filter_by(user_id=user_id).all()
+        return [entry.to_dict() for entry in entries]  # ✅ Fix: Convert to JSON list
 
     @staticmethod
     def get_entry(entry_id):
-        return JournalEntry.query.get(entry_id)
+        """Retrieve a specific journal entry."""
+        entry = db.session.get(JournalEntry, entry_id)  # ✅ Fix for SQLAlchemy 2.0
+        return entry.to_dict() if entry else None
+    # @staticmethod
+    # def get_entry(entry_id):
+    #     """Retrieve a specific journal entry."""
+    #     entry = JournalEntry.query.get(entry_id)
+    #     return entry.to_dict() if entry else None  # ✅ Fix: Convert to dict
 
     @staticmethod
     def update_entry(entry_id, title=None, content=None, tags=None):
@@ -44,16 +55,25 @@ class JournalEntryService:
             entry.content = content
         if tags:
             entry.tags = json.dumps(tags)
-        entry.last_updated = datetime.utcnow()
+        entry.last_updated = datetime.now(timezone.utc) #datetime.utcnow()
 
         db.session.commit()
-        return entry
+        return entry.to_dict()  # ✅ Fix: Convert to JSON
 
     @staticmethod
     def delete_entry(entry_id):
-        entry = JournalEntry.query.get(entry_id)
+        entry = db.session.get(JournalEntry, entry_id)  # ✅ Fix for SQLAlchemy 2.0
         if entry:
             db.session.delete(entry)
             db.session.commit()
             return True
         return False
+
+    # @staticmethod
+    # def delete_entry(entry_id):
+    #     entry = JournalEntry.query.get(entry_id)
+    #     if entry:
+    #         db.session.delete(entry)
+    #         db.session.commit()
+    #         return True
+    #     return False

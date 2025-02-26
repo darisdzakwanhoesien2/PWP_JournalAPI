@@ -4,6 +4,7 @@ from extensions import db
 from models import User, JournalEntry, EditHistory, Comment
 from datetime import datetime
 import json
+from datetime import datetime, timezone
 
 app = create_app()
 
@@ -43,7 +44,7 @@ def insert_journal_entries(file_path):
                 tags=list_to_json([tag.strip() for tag in tags.split(",")]),
                 sentiment_score=float(sentiment_score),
                 sentiment_tag=list_to_json([tag.strip() for tag in sentiment_tag.split(",")]),
-                last_updated=datetime.utcnow()
+                last_updated = datetime.now(timezone.utc)  # Correct way to get current UTC time: Depreciated# last_updated=datetime.utcnow()
             )
             db.session.add(entry)
         db.session.commit()
@@ -58,7 +59,7 @@ def insert_edit_history(file_path):
             edit = EditHistory(
                 journal_entry_id=int(journal_entry_id),
                 user_id=int(user_id),
-                edited_at=datetime.utcnow(),
+                edited_at=datetime.now(timezone.utc), #datetime.utcnow(),
                 previous_content=previous_content.strip(),
                 new_content=new_content.strip()
             )

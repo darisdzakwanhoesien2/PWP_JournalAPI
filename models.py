@@ -1,6 +1,9 @@
 from extensions import db
 from datetime import datetime
 import json
+from datetime import datetime, timezone
+
+datetime.now(timezone.utc)  # Correct way to get current UTC time
 
 def list_to_json(lst):
     """Helper function to convert lists into JSON strings."""
@@ -22,6 +25,24 @@ class User(db.Model):
     comments = db.relationship("Comment", back_populates="author", cascade="all, delete-orphan")
     edit_history = db.relationship("EditHistory", back_populates="editor", cascade="all, delete-orphan")
 
+# class JournalEntry(db.Model):
+#     __tablename__ = "journal_entries"
+    
+#     id = db.Column(db.Integer, primary_key=True)
+#     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+#     title = db.Column(db.String(200), nullable=False)
+#     content = db.Column(db.Text, nullable=False)
+#     date = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+#     # date = db.Column(db.DateTime, default=datetime.utcnow)
+#     tags = db.Column(db.String, default="[]")  # Stored as JSON string
+#     sentiment_score = db.Column(db.Float, nullable=True)
+#     sentiment_tag = db.Column(db.String, default="[]")  # Stored as JSON string
+#     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+#     author = db.relationship("User", back_populates="journal_entries")
+#     comments = db.relationship("Comment", back_populates="journal_entry", cascade="all, delete-orphan")
+#     edit_history = db.relationship("EditHistory", back_populates="journal_entry", cascade="all, delete-orphan")
+
 class JournalEntry(db.Model):
     __tablename__ = "journal_entries"
     
@@ -29,15 +50,30 @@ class JournalEntry(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     title = db.Column(db.String(200), nullable=False)
     content = db.Column(db.Text, nullable=False)
-    date = db.Column(db.DateTime, default=datetime.utcnow)
+    date = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     tags = db.Column(db.String, default="[]")  # Stored as JSON string
     sentiment_score = db.Column(db.Float, nullable=True)
     sentiment_tag = db.Column(db.String, default="[]")  # Stored as JSON string
-    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # last_updated = db.Column(db.DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
+    last_updated = db.Column(db.DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
 
     author = db.relationship("User", back_populates="journal_entries")
     comments = db.relationship("Comment", back_populates="journal_entry", cascade="all, delete-orphan")
     edit_history = db.relationship("EditHistory", back_populates="journal_entry", cascade="all, delete-orphan")
+
+    def to_dict(self):
+        """Convert model instance to dictionary for JSON response."""
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "title": self.title,
+            "content": self.content,
+            "date": self.date.isoformat(),
+            "tags": json.loads(self.tags),
+            "sentiment_score": self.sentiment_score,
+            "sentiment_tag": json.loads(self.sentiment_tag),
+            "last_updated": self.last_updated.isoformat() if self.last_updated else None
+        }
 
 class EditHistory(db.Model):
     __tablename__ = "edit_history"
