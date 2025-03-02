@@ -23,19 +23,19 @@ class JournalEntryService:
         db.session.add(new_entry)
         db.session.commit()
         
-        return {"entry_id": new_entry.id}  # ✅ Return only entry_id
+        return {"entry_id": new_entry.id}  #Return only entry_id
 
 
     @staticmethod
     def get_entries(user_id):
         """Retrieve all journal entries for a user."""
         entries = JournalEntry.query.filter_by(user_id=user_id).all()
-        return [entry.to_dict() for entry in entries]  # ✅ Fix: Convert to JSON list
+        return [entry.to_dict() for entry in entries]  # Fix: Convert to JSON list
 
     @staticmethod
     def get_entry(entry_id):
         """Retrieve a specific journal entry."""
-        entry = db.session.get(JournalEntry, entry_id)  # ✅ Fix for SQLAlchemy 2.0
+        entry = db.session.get(JournalEntry, entry_id)  # Fix for SQLAlchemy 2.0
         return entry.to_dict() if entry else None
 
     @staticmethod
