@@ -16,8 +16,8 @@ def create_app():
 
     # Register blueprints
     app.register_blueprint(user_bp, url_prefix="/users")
-    app.register_blueprint(journal_entry_bp, url_prefix="/entries")
-    app.register_blueprint(comment_bp)  # ✅ FIXED: Register comment routes: , url_prefix="/comments"
+    app.register_blueprint(journal_entry_bp, url_prefix="/entries")  # Now endpoints start with /entries
+    app.register_blueprint(comment_bp)  # ✅ FIXED: Register comment routes: , url_prefix="/comments" # Comment routes remain at the root level as defined
 
     return app
 
