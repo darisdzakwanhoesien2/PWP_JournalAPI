@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from app import create_app  # Import the factory function
 from extensions import db
-from models import User
+from model_folder import User
 
 class TestUserRoutes(unittest.TestCase):
 

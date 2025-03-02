@@ -1,5 +1,5 @@
 from extensions import db
-from models import JournalEntry
+from model_folder import JournalEntry
 from datetime import datetime, timezone
 import json
 

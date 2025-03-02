@@ -3,7 +3,7 @@ from flask_jwt_extended import JWTManager
 from extensions import db
 from routes.user_routes import user_bp
 from routes.journal_entry_routes import journal_entry_bp
-#from routes.comment_routes import comment_bp
+from routes.comment_routes import comment_bp  # ✅ FIXED: Uncommented
 
 def create_app():
     app = Flask(__name__)
@@ -17,6 +17,7 @@ def create_app():
     # Register blueprints
     app.register_blueprint(user_bp, url_prefix="/users")
     app.register_blueprint(journal_entry_bp, url_prefix="/entries")
+    app.register_blueprint(comment_bp, url_prefix="/comments")  # ✅ FIXED: Register comment routes
 
     return app
 

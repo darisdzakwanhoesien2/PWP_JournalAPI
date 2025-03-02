@@ -1,5 +1,5 @@
 from extensions import db
-from models import User
+from model_folder import User
 from werkzeug.security import generate_password_hash, check_password_hash
 
 class UserService:

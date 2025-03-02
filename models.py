@@ -69,6 +69,7 @@ class EditHistory(db.Model):
     journal_entry = db.relationship("JournalEntry", back_populates="edit_history")
     editor = db.relationship("User", back_populates="edit_history")
 
+
 class Comment(db.Model):
     __tablename__ = "comments"
     
@@ -76,7 +77,14 @@ class Comment(db.Model):
     journal_entry_id = db.Column(db.Integer, db.ForeignKey("journal_entries.id"), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     content = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
-    journal_entry = db.relationship("JournalEntry", back_populates="comments")
-    author = db.relationship("User", back_populates="comments")
+    def to_dict(self):
+        """Convert Comment model to dictionary."""
+        return {
+            "id": self.id,
+            "journal_entry_id": self.journal_entry_id,
+            "user_id": self.user_id,
+            "content": self.content,
+            "created_at": self.created_at.isoformat()
+        }
