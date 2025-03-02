@@ -1,4 +1,12 @@
 from extensions import db
+import json 
+
+def list_to_json(lst):
+    return json.dumps(lst)
+
+def json_to_list(json_str):
+    return json.loads(json_str) if json_str else []
+
 
 class User(db.Model):
     __tablename__ = "users"

@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from app import create_app
 from extensions import db
-from model_folder import JournalEntry, User
+from models import JournalEntry, User
 
 class TestJournalEntryRoutes(unittest.TestCase):
 

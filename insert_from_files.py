@@ -1,7 +1,7 @@
 import csv
 from app import create_app
 from extensions import db
-from model_folder import User, JournalEntry, EditHistory, Comment
+from models import User, JournalEntry, EditHistory, Comment
 from datetime import datetime
 import json
 from datetime import datetime, timezone

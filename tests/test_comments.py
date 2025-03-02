@@ -20,7 +20,7 @@ class TestCommentRoutes(unittest.TestCase):
         self.app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
         self.client = self.app.test_client()
 
-        with self.app.app_context():  # ✅ FIX: Push app context before DB operations
+        with self.app.app_context():
             db.create_all()
 
             # Create test user
@@ -29,22 +29,21 @@ class TestCommentRoutes(unittest.TestCase):
             db.session.add(user)
             db.session.commit()
 
+            db.session.refresh(user)  # ✅ Keeps user attached to session
+            self.user_id = user.id
+
             # Create test journal entry
-            journal_entry = JournalEntry(
-                user_id=user.id,
-                title="Test Journal Entry",
-                content="This is a test journal entry."
-            )
+            journal_entry = JournalEntry(user_id=user.id, title="Test Journal Entry", content="This is a test journal entry.")
             db.session.add(journal_entry)
             db.session.commit()
 
-            self.user_id = user.id
+            db.session.refresh(journal_entry)  # ✅ Keeps journal entry attached to session
             self.entry_id = journal_entry.id
             self.token = create_access_token(identity=self.user_id)
 
     def tearDown(self):
         """Clean up database after each test."""
-        with self.app.app_context():  # ✅ FIX: Ensure app context before DB cleanup
+        with self.app.app_context():
             db.session.remove()
             db.drop_all()
 
@@ -60,14 +59,12 @@ class TestCommentRoutes(unittest.TestCase):
 
     def test_get_comments(self):
         """Test retrieving comments for a journal entry."""
-        # First, create a comment
         self.client.post(
             f"/entries/{self.entry_id}/comments",
             json={"content": "This is a test comment."},
             headers={"Authorization": f"Bearer {self.token}"}
         )
 
-        # Now retrieve comments
         response = self.client.get(
             f"/entries/{self.entry_id}/comments",
             headers={"Authorization": f"Bearer {self.token}"}
@@ -80,7 +77,6 @@ class TestCommentRoutes(unittest.TestCase):
 
     def test_update_comment(self):
         """Test updating a comment."""
-        # First, create a comment
         create_response = self.client.post(
             f"/entries/{self.entry_id}/comments",
             json={"content": "Original Comment"},
@@ -88,7 +84,6 @@ class TestCommentRoutes(unittest.TestCase):
         )
         comment_id = create_response.get_json()["comment"]["id"]
 
-        # Now update the comment
         update_response = self.client.put(
             f"/comments/{comment_id}",
             json={"content": "Updated Comment"},
@@ -100,7 +95,6 @@ class TestCommentRoutes(unittest.TestCase):
 
     def test_delete_comment(self):
         """Test deleting a comment."""
-        # First, create a comment
         create_response = self.client.post(
             f"/entries/{self.entry_id}/comments",
             json={"content": "Comment to be deleted"},
@@ -108,7 +102,6 @@ class TestCommentRoutes(unittest.TestCase):
         )
         comment_id = create_response.get_json()["comment"]["id"]
 
-        # Now delete the comment
         delete_response = self.client.delete(
             f"/comments/{comment_id}",
             headers={"Authorization": f"Bearer {self.token}"}
@@ -117,7 +110,6 @@ class TestCommentRoutes(unittest.TestCase):
         self.assertEqual(delete_response.status_code, 200)
         self.assertIn("Comment deleted", delete_response.get_json()["message"])
 
-        # Verify deletion
         get_response = self.client.get(
             f"/entries/{self.entry_id}/comments",
             headers={"Authorization": f"Bearer {self.token}"}
