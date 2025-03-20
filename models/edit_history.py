@@ -1,5 +1,6 @@
 from extensions import db
 from datetime import datetime
+import json
 
 def list_to_json(lst):
     return json.dumps(lst)
