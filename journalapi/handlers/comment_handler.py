@@ -1,7 +1,7 @@
 from journalapi import db
 from journalapi.models import Comment
 
-class CommentService:
+class CommentHandler:
 
     @staticmethod
     def add_comment(entry_id, user_id, content):

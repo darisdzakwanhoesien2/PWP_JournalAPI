@@ -1,7 +1,7 @@
 from flask_restful import Resource, Api
 from flask import jsonify, request, url_for
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
-from journalapi.handlers.user_service import UserService
+from journalapi.handlers.user_handler import UserHandler
 from journalapi.utils import JsonResponse
 
 class UserRegisterResource(Resource):
@@ -14,7 +14,7 @@ class UserRegisterResource(Resource):
         if not username or not email or not password:
             return JsonResponse({"error": "Missing required fields"}, 400)
         
-        user = UserService.register_user(username, email, password)
+        user = UserHandler.register_user(username, email, password)
         if not user:
             return JsonResponse({"error": "User already exists"}, 400)  
         
@@ -31,7 +31,7 @@ class UserLoginResource(Resource):
         if not email or not password:
             return JsonResponse({"error": "Missing email or password"}, 400)
 
-        user = UserService.login_user(email, password)
+        user = UserHandler.login_user(email, password)
         if not user:
             return JsonResponse({"error": "Invalid credentials"}, 401)
 
@@ -49,7 +49,7 @@ class UserResource(Resource):
         if current_user_id != user_id:
             return JsonResponse({"error": "Unauthorized"}, 403)
 
-        user = UserService.get_user(user_id)
+        user = UserHandler.get_user(user_id)
         if not user:
             return JsonResponse({"error": "User not found"}, 404)
 
@@ -66,7 +66,7 @@ class UserResource(Resource):
             return JsonResponse({"error": "Unauthorized"}, 403)
 
         data = request.get_json()
-        updated_user = UserService.update_user(
+        updated_user = UserHandler.update_user(
             user_id,
             username=data.get("username"),
             email=data.get("email"),
@@ -85,7 +85,7 @@ class UserResource(Resource):
         if current_user_id != user_id:
             return JsonResponse({"error": "Unauthorized"}, 403)
 
-        if not UserService.delete_user(user_id):
+        if not UserHandler.delete_user(user_id):
             return JsonResponse({"error": "User not found"}, 404)
 
         return JsonResponse({

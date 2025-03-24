@@ -3,7 +3,7 @@ from journalapi.models import JournalEntry
 from datetime import datetime, timezone
 import json
 
-class JournalEntryService:
+class JournalEntryHandler:
 
     @staticmethod
     def create_entry(user_id, title, content, tags=None):

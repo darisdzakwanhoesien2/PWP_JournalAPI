@@ -2,7 +2,7 @@ from journalapi import db
 from journalapi.models import User
 from werkzeug.security import generate_password_hash, check_password_hash
 
-class UserService:
+class UserHandler:
 
     @staticmethod
     def register_user(username, email, password):
