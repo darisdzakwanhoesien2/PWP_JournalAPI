@@ -121,13 +121,26 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/UserRegister'
+            example:
+              username: johndoe
+              email: john@example.com
+              password: secret123
       responses:
         201:
           description: User registered
         400:
           description: User already exists
+          content:
+            application/json:
+              example:
+                error: User already exists
         422:
           description: Validation error
+          content:
+            application/json:
+              example:
+                errors:
+                  email: ["Not a valid email address."]
 
   /users/login:
     post:
@@ -138,6 +151,9 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/UserLogin'
+            example:
+              email: john@example.com
+              password: secret123
       responses:
         200:
           description: JWT token
@@ -145,10 +161,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Token'
+              example:
+                token: eyJhbGciOiJIUzI1NiIsInR5cCI...
         401:
           description: Invalid credentials
+          content:
+            application/json:
+              example:
+                error: Invalid credentials
         422:
           description: Validation error
+          content:
+            application/json:
+              example:
+                errors:
+                  password: ["Missing data for required field."]
 
   /users/{user_id}:
     get:
@@ -166,8 +193,10 @@ paths:
           description: User profile
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/User'
+              example:
+                id: 1
+                username: johndoe
+                email: john@example.com
         403:
           description: Unauthorized
         404:
@@ -183,6 +212,10 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/UserRegister'
+            example:
+              username: johnupdated
+              email: john@example.com
+              password: newpassword456
       responses:
         200:
           description: User updated
@@ -213,10 +246,13 @@ paths:
           description: List of entries
           content:
             application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/JournalEntry'
+              example:
+                - id: 1
+                  title: My Day
+                  content: Today was good
+                  tags: [happy, sunny]
+                  sentiment_score: 0.8
+                  sentiment_tag: [positive]
 
     post:
       summary: Create a new journal entry
@@ -228,9 +264,17 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/JournalEntry'
+            example:
+              title: My Day
+              content: Today was good
+              tags: [happy, sunny]
       responses:
         201:
           description: Entry created
+          content:
+            application/json:
+              example:
+                entry_id: 1
         422:
           description: Validation error
 
@@ -250,8 +294,15 @@ paths:
           description: Journal entry
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/JournalEntry'
+              example:
+                id: 1
+                title: My Day
+                content: Today was good
+                tags: [happy, sunny]
+                sentiment_score: 0.8
+                sentiment_tag: [positive]
+                date: 2024-03-01T12:00:00Z
+                last_updated: 2024-03-01T12:30:00Z
         404:
           description: Not found
 
@@ -265,6 +316,10 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/JournalEntry'
+            example:
+              title: Updated Title
+              content: Updated content
+              tags: [update, edit]
       responses:
         200:
           description: Entry updated
@@ -291,10 +346,12 @@ paths:
           description: List of comments
           content:
             application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Comment'
+              example:
+                - id: 1
+                  journal_entry_id: 1
+                  user_id: 1
+                  content: Great journal!
+                  timestamp: 2024-03-01T13:00:00Z
 
     post:
       summary: Add a comment to an entry
@@ -306,9 +363,15 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/Comment'
+            example:
+              content: Great journal!
       responses:
         201:
           description: Comment added
+          content:
+            application/json:
+              example:
+                comment_id: 1
         422:
           description: Validation error
 
@@ -323,6 +386,8 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/Comment'
+            example:
+              content: Edited comment text
       responses:
         200:
           description: Comment updated
@@ -349,9 +414,12 @@ paths:
           description: List of edits
           content:
             application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/EditHistory'
+              example:
+                - id: 1
+                  journal_entry_id: 1
+                  user_id: 1
+                  previous_content: Old entry content
+                  new_content: New edited content
+                  edited_at: 2024-03-01T14:00:00Z
         404:
           description: Not found

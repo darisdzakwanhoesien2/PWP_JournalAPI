@@ -175,3 +175,149 @@ flask init-db
 ```bash
 pytest --cov=pwp_journalapi tests/
 python -m pytest --cov=journalapi --cov-report=term-missing tests/
+
+Perfect — let’s finish this strong!  
+We’ll now tackle:
+
+---
+
+## ✅ Step 3: Help You Write the `README.md` / Wiki API Documentation Section
+
+This is what you can copy-paste into your project `README.md` **or** course submission **wiki** page:
+
+---
+
+### 📘 API Documentation
+
+#### 🔗 Live Documentation
+- **Swagger UI**: [http://localhost:5000/apidocs](http://localhost:5000/apidocs)
+- **Raw OpenAPI YAML**: [`docs/openapi.yaml`](./docs/openapi.yaml)
+- Viewable via: [Swagger Editor](https://editor.swagger.io/)
+
+---
+
+### 📌 Overview
+
+This project provides a secure journaling REST API that allows users to:
+
+- Register and log in
+- Create, update, and delete journal entries
+- Comment on entries
+- View edit history
+- Use hypermedia links to navigate between resources
+
+---
+
+### 🔐 Authentication
+All protected routes use **JWT Bearer Tokens**:
+- Header format:  
+  `Authorization: Bearer <your-token>`
+
+---
+
+### 🧱 Media Type
+- All responses use `application/json`
+- Hypermedia links are embedded as `_links` in each resource
+
+---
+
+### 📂 Resources and Link Relations
+
+| Resource      | Link Relations                                                                 |
+|---------------|----------------------------------------------------------------------------------|
+| `User`        | `self`, `edit`, `delete`                                                        |
+| `JournalEntry`| `self`, `edit`, `delete`, `comments`, `history`                                |
+| `Comment`     | `self`, `edit`, `delete`                                                        |
+| `EditHistory` | `self` (optional, if needed)                                                    |
+
+Standard IANA links (`self`, `edit`, `delete`) are used where possible.  
+Custom link relation: `comments`, `history` (justified below).
+
+---
+
+### 📡 Example Hypermedia Response
+
+```json
+{
+  "id": 3,
+  "title": "My Journal",
+  "tags": ["reflection", "grateful"],
+  "_links": {
+    "self": { "href": "/entries/3" },
+    "edit": { "href": "/entries/3" },
+    "delete": { "href": "/entries/3" },
+    "comments": { "href": "/entries/3/comments" },
+    "history": { "href": "/entries/3/history" }
+  }
+}
+```
+
+---
+
+### 🚧 Error Handling
+
+| Code | Meaning              | Example                        |
+|------|----------------------|--------------------------------|
+| 422  | Validation Error     | Missing required field         |
+| 401  | Unauthorized         | Token missing or invalid       |
+| 403  | Forbidden            | User not allowed to access     |
+| 404  | Not Found            | Resource doesn't exist         |
+
+---
+
+### 🧪 Functional Testing
+
+- Run tests with:  
+  `python -m pytest --cov=journalapi --cov-report=term-missing tests/`
+
+- Test coverage: **96%+**
+- Tests include:
+  - Valid and invalid input
+  - Auth protection
+  - Link presence in hypermedia responses
+
+---
+
+## ✅ Step 4: Hypermedia State Diagram
+
+I'll now describe what you should include in your diagram 👇
+
+---
+
+### 🔁 State Diagram Overview
+
+Use a diagram tool (like draw.io or Lucidchart) to show the transitions between these states:
+
+**States (circles/boxes):**
+- Register
+- Login
+- `/users/{id}`
+- `/entries/`
+- `/entries/{id}`
+- `/entries/{id}/comments`
+- `/entries/{id}/history`
+
+**Transitions (arrows):**
+- `POST /users/register` → `POST /users/login`
+- `POST /users/login` → `/users/{id}` (GET, PUT, DELETE)
+- `/users/{id}` → `/entries/` (GET, POST)
+- `/entries/` → `/entries/{id}` → `/entries/{id}/comments` + `/entries/{id}/history`
+
+**Example:**
+```
+[Register] → [Login] → [User Profile] → [Entries List] → [Entry Detail] → [Comments / History]
+```
+
+**Each arrow labeled with HTTP method.**
+
+---
+
+### ✅ Custom Link Relation Justification
+
+- `comments`: used to navigate from a journal entry to its related comments. No standard IANA relation for this.
+- `history`: used to navigate to a journal entry's edit history. Custom but semantically clear.
+
+---
+
+Would you like a draw.io diagram JSON export I can generate for you?  
+Or should we move on to final checklist & submission prep? ✅

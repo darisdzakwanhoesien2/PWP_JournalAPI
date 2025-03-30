@@ -1,6 +1,4 @@
 # journalapi/resources/comment.py
-# journalapi/resources/comment.py
-
 from flask_restful import Resource
 from flask import request
 from flask_jwt_extended import jwt_required, get_jwt_identity
@@ -17,12 +15,21 @@ class CommentCollectionResource(Resource):
     @jwt_required()
     def get(self, entry_id):
         comments = Comment.query.filter_by(journal_entry_id=entry_id).all()
-        data = [{
-            "id": c.id,
-            "user_id": c.user_id,
-            "content": c.content,
-            "timestamp": c.timestamp.isoformat() if c.timestamp else None
-        } for c in comments]
+        data = []
+        for c in comments:
+            item = {
+                "id": c.id,
+                "journal_entry_id": c.journal_entry_id,
+                "user_id": c.user_id,
+                "content": c.content,
+                "timestamp": c.timestamp.isoformat() if c.timestamp else None,
+                "_links": {
+                    "self": {"href": f"/entries/{entry_id}/comments/{c.id}"},
+                    "edit": {"href": f"/entries/{entry_id}/comments/{c.id}"},
+                    "delete": {"href": f"/entries/{entry_id}/comments/{c.id}"}
+                }
+            }
+            data.append(item)
         return JsonResponse(data, 200)
 
     @jwt_required()
@@ -32,19 +39,17 @@ class CommentCollectionResource(Resource):
         except ValidationError as err:
             return JsonResponse({"errors": err.messages}, 422)
 
-        # Convert identity from string -> int
         user_id = int(get_jwt_identity())
 
         comment = Comment(
             journal_entry_id=entry_id,
-            user_id=user_id,  # store as integer
+            user_id=user_id,
             content=data["content"]
         )
         db.session.add(comment)
         db.session.commit()
 
         return JsonResponse({"comment_id": comment.id}, 201)
-
 
 class CommentItemResource(Resource):
     @jwt_required()
@@ -55,8 +60,6 @@ class CommentItemResource(Resource):
             return JsonResponse({"errors": err.messages}, 422)
 
         user_id = int(get_jwt_identity())
-
-        # Using the recommended db.session.get:
         comment = db.session.get(Comment, comment_id)
         if not comment or comment.user_id != user_id or comment.journal_entry_id != entry_id:
             return JsonResponse({"error": "Not found"}, 404)
