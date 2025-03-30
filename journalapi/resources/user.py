@@ -4,10 +4,9 @@ from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identi
 from werkzeug.security import generate_password_hash, check_password_hash
 from marshmallow import ValidationError
 
-from ..models import User
-from .. import db
-from ..utils import JsonResponse
-from ...schemas import UserRegisterSchema, UserLoginSchema
+from journalapi.models import db, User
+from journalapi.utils import JsonResponse
+from schemas import UserRegisterSchema, UserLoginSchema
 
 register_schema = UserRegisterSchema()
 login_schema = UserLoginSchema()
@@ -17,16 +16,13 @@ class UserRegisterResource(Resource):
         try:
             data = register_schema.load(request.get_json())
         except ValidationError as err:
-            return JsonResponse({"errors": err.messages}, 400)
+            return JsonResponse({"errors": err.messages}, 422)
 
         if User.query.filter_by(email=data["email"]).first():
             return JsonResponse({"error": "User already exists"}, 400)
 
-        user = User(
-            username=data["username"],
-            email=data["email"],
-            password=generate_password_hash(data["password"])
-        )
+        hashed_password = generate_password_hash(data["password"])
+        user = User(username=data["username"], email=data["email"], password=hashed_password)
         db.session.add(user)
         db.session.commit()
 
@@ -37,13 +33,14 @@ class UserLoginResource(Resource):
         try:
             data = login_schema.load(request.get_json())
         except ValidationError as err:
-            return JsonResponse({"errors": err.messages}, 400)
+            return JsonResponse({"errors": err.messages}, 422)
 
         user = User.query.filter_by(email=data["email"]).first()
         if not user or not check_password_hash(user.password, data["password"]):
             return JsonResponse({"error": "Invalid credentials"}, 401)
 
-        return JsonResponse({"token": create_access_token(identity=user.id)}, 200)
+        token = create_access_token(identity=user.id)
+        return JsonResponse({"token": token}, 200)
 
 class UserResource(Resource):
     @jwt_required()
@@ -52,7 +49,7 @@ class UserResource(Resource):
         if current_user_id != user_id:
             return JsonResponse({"error": "Unauthorized"}, 403)
 
-        user = db.session.get(User, user_id)
+        user = User.query.get(user_id)
         if not user:
             return JsonResponse({"error": "User not found"}, 404)
 
@@ -68,11 +65,11 @@ class UserResource(Resource):
         if current_user_id != user_id:
             return JsonResponse({"error": "Unauthorized"}, 403)
 
-        data = request.get_json()
-        user = db.session.get(User, user_id)
+        user = User.query.get(user_id)
         if not user:
             return JsonResponse({"error": "User not found"}, 404)
 
+        data = request.get_json() or {}
         if "username" in data:
             user.username = data["username"]
         if "email" in data:
@@ -89,7 +86,7 @@ class UserResource(Resource):
         if current_user_id != user_id:
             return JsonResponse({"error": "Unauthorized"}, 403)
 
-        user = db.session.get(User, user_id)
+        user = User.query.get(user_id)
         if not user:
             return JsonResponse({"error": "User not found"}, 404)
 

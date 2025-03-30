@@ -1,35 +1,45 @@
-# app.py
+import os
 from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager
-from extensions import db
+
+# We'll import the blueprint from journalapi.api
+# and also the CLI from journalapi.cli
+from journalapi.api import api_bp
+from journalapi.cli import init_db_command
+
+# Create a single DB instance globally
+db = SQLAlchemy()
 
 def create_app(test_config=None):
-    app = Flask(__name__)
-    # Provide a default config
+    """Application factory function."""
+    app = Flask(__name__, instance_relative_config=True)
+
+    # Provide a default config (used in dev)
     app.config.from_mapping(
-        TESTING=False,
-        SQLALCHEMY_DATABASE_URI="sqlite:///journal.db",
-        SQLALCHEMY_TRACK_MODIFICATIONS=False,
-        JWT_SECRET_KEY="user123"
+        SECRET_KEY="dev",
+        SQLALCHEMY_DATABASE_URI="sqlite:///" + os.path.join(app.instance_path, "journal.db"),
+        SQLALCHEMY_TRACK_MODIFICATIONS=False
     )
 
-    # If test config is given, override
+    # If test config is given, override defaults
     if test_config:
         app.config.update(test_config)
+
+    # Ensure instance folder exists
+    try:
+        os.makedirs(app.instance_path, exist_ok=True)
+    except OSError:
+        pass
 
     db.init_app(app)
     JWTManager(app)
 
-    # Register blueprints
-    from routes.user_routes import user_bp
-    from routes.journal_entry_routes import journal_entry_bp
-    from routes.comment_routes import comment_bp
-    app.register_blueprint(user_bp, url_prefix="/users")
-    app.register_blueprint(journal_entry_bp, url_prefix="/entries")
-    app.register_blueprint(comment_bp)
+    # Register blueprint with optional prefix. 
+    # If you want routes at /api/... add url_prefix="/api".
+    app.register_blueprint(api_bp)
+
+    # Register CLI command for init-db
+    app.cli.add_command(init_db_command)
 
     return app
-
-if __name__ == "__main__":
-    app = create_app()
-    app.run(debug=True)

@@ -1,9 +1,8 @@
-# journalapi/schemas.py
-from marshmallow import Schema, fields, validate, ValidationError, EXCLUDE
+from marshmallow import Schema, fields, validate, EXCLUDE
 
 class UserRegisterSchema(Schema):
     class Meta:
-        unknown = EXCLUDE  # or INCLUDE if you prefer
+        unknown = EXCLUDE
     username = fields.Str(required=True, validate=validate.Length(min=1))
     email = fields.Email(required=True)
     password = fields.Str(required=True, validate=validate.Length(min=6))

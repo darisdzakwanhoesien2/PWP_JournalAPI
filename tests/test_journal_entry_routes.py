@@ -5,9 +5,8 @@ from werkzeug.security import generate_password_hash
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from app import create_app
-from extensions import db
-from models import JournalEntry, User
+from app import create_app, db
+from journalapi.models import JournalEntry, User
 
 class TestJournalEntryRoutes(unittest.TestCase):
 
@@ -17,7 +16,6 @@ class TestJournalEntryRoutes(unittest.TestCase):
             "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"
         })
         self.client = self.app.test_client()
-
         with self.app.app_context():
             db.create_all()
 
@@ -36,10 +34,9 @@ class TestJournalEntryRoutes(unittest.TestCase):
             "email": "test@example.com",
             "password": "password123"
         })
-
         print("Login Response:", response.get_json())
         self.assertEqual(response.status_code, 200)
-        return response.get_json().get("token")
+        return response.get_json()["token"]
 
     def test_create_entry(self):
         token = self.login_user()
@@ -53,6 +50,7 @@ class TestJournalEntryRoutes(unittest.TestCase):
 
     def test_get_entries(self):
         token = self.login_user()
+        # create an entry first
         self.client.post("/entries/", json={
             "title": "Test Entry",
             "content": "Testing retrieval",
@@ -78,9 +76,8 @@ class TestJournalEntryRoutes(unittest.TestCase):
             "content": "Updated content",
             "tags": ["updated"]
         }, headers={"Authorization": f"Bearer {token}"})
-
         self.assertEqual(update_response.status_code, 200)
-        self.assertIn("Updated", update_response.get_json()["message"])
+        self.assertIn("fully replaced", update_response.get_json()["message"])
 
     def test_delete_entry(self):
         token = self.login_user()
