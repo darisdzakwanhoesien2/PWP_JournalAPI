@@ -17,14 +17,7 @@ class JournalEntryListResource(Resource):
     def get(self):
         user_id = get_jwt_identity()
         entries = JournalEntry.query.filter_by(user_id=user_id).all()
-        data = []
-        for e in entries:
-            data.append({
-                "id": e.id,
-                "title": e.title,
-                "tags": json.loads(e.tags),
-                "last_updated": e.last_updated.isoformat() if e.last_updated else None
-            })
+        data = [entry.to_dict() for entry in entries]
         return JsonResponse(data, 200)
 
     @jwt_required()
@@ -39,11 +32,12 @@ class JournalEntryListResource(Resource):
             user_id=user_id,
             title=data["title"],
             content=data["content"],
-            tags=json.dumps(data.get("tags", []))
+            tags=json.dumps(data.get("tags", [])),
+            sentiment_score=0.75,  # example sentiment score
+            sentiment_tag=json.dumps(["positive"])
         )
         db.session.add(new_entry)
         db.session.commit()
-
         return JsonResponse({"entry_id": new_entry.id}, 201)
 
 class JournalEntryResource(Resource):
@@ -53,17 +47,7 @@ class JournalEntryResource(Resource):
         entry = JournalEntry.query.get(entry_id)
         if not entry or entry.user_id != user_id:
             return JsonResponse({"error": "Not found"}, 404)
-
-        return JsonResponse({
-            "id": entry.id,
-            "title": entry.title,
-            "content": entry.content,
-            "tags": json.loads(entry.tags),
-            "sentiment_score": entry.sentiment_score,
-            "sentiment_tag": json.loads(entry.sentiment_tag),
-            "date": entry.date.isoformat() if entry.date else None,
-            "last_updated": entry.last_updated.isoformat() if entry.last_updated else None
-        }, 200)
+        return JsonResponse(entry.to_dict(), 200)
 
     @jwt_required()
     def put(self, entry_id):
@@ -89,7 +73,6 @@ class JournalEntryResource(Resource):
         entry = JournalEntry.query.get(entry_id)
         if not entry or entry.user_id != user_id:
             return JsonResponse({"error": "Not found"}, 404)
-
         db.session.delete(entry)
         db.session.commit()
         return JsonResponse({"message": "Entry deleted successfully"}, 200)
