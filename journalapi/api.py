@@ -6,18 +6,25 @@ from journalapi.resources.user import UserRegisterResource, UserLoginResource, U
 from journalapi.resources.journal_entry import JournalEntryListResource, JournalEntryResource
 from journalapi.resources.comment import CommentCollectionResource, CommentItemResource
 
-api_bp = Blueprint("api", __name__, url_prefix="")  # or "/api" if you want
+# Add your new resource import:
+from journalapi.resources.edit_history import EditHistoryResource
+
+api_bp = Blueprint("api", __name__, url_prefix="")  # or "/api"
 api = Api(api_bp)
 
-# USER
+# User endpoints
 api.add_resource(UserRegisterResource, "/users/register")
 api.add_resource(UserLoginResource, "/users/login")
 api.add_resource(UserResource, "/users/<int:user_id>")
 
-# JOURNAL ENTRIES
+# Journal Entry endpoints
 api.add_resource(JournalEntryListResource, "/entries/")
 api.add_resource(JournalEntryResource, "/entries/<int:entry_id>")
 
-# COMMENTS (nested under /entries/<entry_id>/comments)
+# Comment endpoints
 api.add_resource(CommentCollectionResource, "/entries/<int:entry_id>/comments")
 api.add_resource(CommentItemResource, "/entries/<int:entry_id>/comments/<int:comment_id>")
+
+# Finally, Edit History route:
+api.add_resource(EditHistoryResource, "/entries/<int:entry_id>/history")
+

@@ -1,7 +1,6 @@
 # journalapi/models.py
 from datetime import datetime
 import json
-
 from extensions import db
 
 class User(db.Model):
@@ -12,8 +11,17 @@ class User(db.Model):
     email = db.Column(db.String(100), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
 
-    journal_entries = db.relationship("JournalEntry", backref="author", cascade="all, delete-orphan")
-    comments = db.relationship("Comment", backref="author", cascade="all, delete-orphan")
+    journal_entries = db.relationship(
+        "JournalEntry", backref="author", cascade="all, delete-orphan"
+    )
+    comments = db.relationship(
+        "Comment", backref="author", cascade="all, delete-orphan"
+    )
+    # Relationship to track who edited (editors):
+    edit_histories = db.relationship(
+        "EditHistory", backref="editor", cascade="all, delete-orphan"
+    )
+
 
 class JournalEntry(db.Model):
     __tablename__ = "journal_entries"
@@ -22,13 +30,16 @@ class JournalEntry(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     title = db.Column(db.String(200), nullable=False)
     content = db.Column(db.Text, nullable=False)
-    tags = db.Column(db.String, default="[]")
-    sentiment_score = db.Column(db.Float)
+    tags = db.Column(db.String, default="[]")  # stored as JSON string
+    sentiment_score = db.Column(db.Float, nullable=True)
     sentiment_tag = db.Column(db.String, default="[]")
     date = db.Column(db.DateTime, default=datetime.utcnow)
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     comments = db.relationship("Comment", backref="journal_entry", cascade="all, delete-orphan")
+    # Relationship to track all edits:
+    edit_histories = db.relationship("EditHistory", backref="journal_entry", cascade="all, delete-orphan")
+
 
 class Comment(db.Model):
     __tablename__ = "comments"
@@ -38,3 +49,14 @@ class Comment(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     content = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+# NEW MODEL
+class EditHistory(db.Model):
+    __tablename__ = "edit_history"
+
+    id = db.Column(db.Integer, primary_key=True)
+    journal_entry_id = db.Column(db.Integer, db.ForeignKey("journal_entries.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    edited_at = db.Column(db.DateTime, default=datetime.utcnow)
+    previous_content = db.Column(db.Text, nullable=False)
+    new_content = db.Column(db.Text, nullable=False)

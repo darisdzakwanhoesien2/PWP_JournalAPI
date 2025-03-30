@@ -40,6 +40,7 @@ class CommentCollectionResource(Resource):
         )
         db.session.add(comment)
         db.session.commit()
+
         return JsonResponse({"comment_id": comment.id}, 201)
 
 class CommentItemResource(Resource):

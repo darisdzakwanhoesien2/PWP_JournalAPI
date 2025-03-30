@@ -1,4 +1,5 @@
 # journalapi/resources/journal_entry.py
+# journalapi/resources/journal_entry.py
 from flask_restful import Resource
 from flask import request
 from flask_jwt_extended import jwt_required, get_jwt_identity
@@ -35,16 +36,16 @@ class JournalEntryListResource(Resource):
         except ValidationError as err:
             return JsonResponse({"errors": err.messages}, 422)
 
-        entry = JournalEntry(
+        new_entry = JournalEntry(
             user_id=user_id,
             title=data["title"],
             content=data["content"],
             tags=json.dumps(data.get("tags", []))
         )
-        db.session.add(entry)
+        db.session.add(new_entry)
         db.session.commit()
 
-        return JsonResponse({"entry_id": entry.id}, 201)
+        return JsonResponse({"entry_id": new_entry.id}, 201)
 
 class JournalEntryResource(Resource):
     @jwt_required()
