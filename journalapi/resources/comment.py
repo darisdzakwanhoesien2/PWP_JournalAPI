@@ -6,7 +6,7 @@ from marshmallow import ValidationError
 from ..models import Comment
 from .. import db
 from ..utils import JsonResponse
-from ..schemas import CommentSchema
+from ...schemas import CommentSchema
 
 comment_schema = CommentSchema()
 

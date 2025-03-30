@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="pwp_journalapi",
+    name="journalapi",
     version="0.1.0",
     description="A Flask RESTful journaling API.",
     author="Your Name",

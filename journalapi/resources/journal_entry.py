@@ -7,7 +7,7 @@ import json
 from ..models import JournalEntry
 from .. import db
 from ..utils import JsonResponse
-from ..schemas import JournalEntrySchema
+from ...schemas import JournalEntrySchema
 
 entry_schema = JournalEntrySchema()
 

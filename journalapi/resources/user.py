@@ -7,7 +7,7 @@ from marshmallow import ValidationError
 from ..models import User
 from .. import db
 from ..utils import JsonResponse
-from ..schemas import UserRegisterSchema, UserLoginSchema
+from ...schemas import UserRegisterSchema, UserLoginSchema
 
 register_schema = UserRegisterSchema()
 login_schema = UserLoginSchema()

@@ -162,7 +162,7 @@ A RESTful Flask API for journaling. Includes user management, entries, comments,
 ## Setup
 ```bash
 pip install -e .
-export FLASK_APP=pwp_journalapi
+export FLASK_APP=rnalapi
 flask run
 ```
 
@@ -174,3 +174,4 @@ flask init-db
 ## Testing
 ```bash
 pytest --cov=pwp_journalapi tests/
+python -m pytest --cov=journalapi --cov-report=term-missing tests/
