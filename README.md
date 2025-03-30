@@ -98,6 +98,10 @@ python -m pytest tests/test_comments.py
 
 These tests cover user management, journal entry management, and comment functionality.
 
+New Ways to Test it over
+```bash
+pytest tests/
+```
 ---
 
 ## API Endpoints
