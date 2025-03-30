@@ -1,0 +1,357 @@
+openapi: 3.0.3
+info:
+  title: PWP Journal API
+  version: 1.0.0
+  description: |
+    This API allows users to register, log in, create journal entries, comment on entries, and track edit history.
+    Hypermedia controls are used to enhance navigation between resources.
+  contact:
+    name: Daris Dzakwan Hoesien
+    email: your-email@example.com
+servers:
+  - url: http://localhost:5000
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+      required: [id, username, email]
+
+    UserRegister:
+      type: object
+      required: [username, email, password]
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+
+    UserLogin:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+
+    Token:
+      type: object
+      properties:
+        token:
+          type: string
+
+    JournalEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        content:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        sentiment_score:
+          type: number
+        sentiment_tag:
+          type: array
+          items:
+            type: string
+        date:
+          type: string
+        last_updated:
+          type: string
+      required: [id, title, content, tags]
+
+    Comment:
+      type: object
+      properties:
+        id:
+          type: integer
+        journal_entry_id:
+          type: integer
+        user_id:
+          type: integer
+        content:
+          type: string
+        timestamp:
+          type: string
+
+    EditHistory:
+      type: object
+      properties:
+        id:
+          type: integer
+        journal_entry_id:
+          type: integer
+        user_id:
+          type: integer
+        previous_content:
+          type: string
+        new_content:
+          type: string
+        edited_at:
+          type: string
+
+paths:
+  /users/register:
+    post:
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRegister'
+      responses:
+        201:
+          description: User registered
+        400:
+          description: User already exists
+        422:
+          description: Validation error
+
+  /users/login:
+    post:
+      summary: Log in and retrieve a token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserLogin'
+      responses:
+        200:
+          description: JWT token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Token'
+        401:
+          description: Invalid credentials
+        422:
+          description: Validation error
+
+  /users/{user_id}:
+    get:
+      summary: Get user info
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: user_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        200:
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        403:
+          description: Unauthorized
+        404:
+          description: User not found
+
+    put:
+      summary: Update user info
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRegister'
+      responses:
+        200:
+          description: User updated
+        403:
+          description: Unauthorized
+        404:
+          description: User not found
+
+    delete:
+      summary: Delete user account
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: User deleted
+        403:
+          description: Unauthorized
+        404:
+          description: User not found
+
+  /entries/:
+    get:
+      summary: Get all journal entries of the logged-in user
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JournalEntry'
+
+    post:
+      summary: Create a new journal entry
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JournalEntry'
+      responses:
+        201:
+          description: Entry created
+        422:
+          description: Validation error
+
+  /entries/{entry_id}:
+    get:
+      summary: Get a specific journal entry
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Journal entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntry'
+        404:
+          description: Not found
+
+    put:
+      summary: Update a journal entry
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JournalEntry'
+      responses:
+        200:
+          description: Entry updated
+        404:
+          description: Not found
+
+    delete:
+      summary: Delete a journal entry
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Entry deleted
+        404:
+          description: Not found
+
+  /entries/{entry_id}/comments:
+    get:
+      summary: Get comments on a journal entry
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of comments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Comment'
+
+    post:
+      summary: Add a comment to an entry
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Comment'
+      responses:
+        201:
+          description: Comment added
+        422:
+          description: Validation error
+
+  /entries/{entry_id}/comments/{comment_id}:
+    put:
+      summary: Update a comment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Comment'
+      responses:
+        200:
+          description: Comment updated
+        404:
+          description: Not found
+
+    delete:
+      summary: Delete a comment
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Comment deleted
+        404:
+          description: Not found
+
+  /entries/{entry_id}/history:
+    get:
+      summary: Get edit history for an entry
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of edits
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EditHistory'
+        404:
+          description: Not found
