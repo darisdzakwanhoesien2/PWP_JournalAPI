@@ -29,7 +29,7 @@ class CommentCollectionResource(Resource):
     def post(self, entry_id):
         user_id = get_jwt_identity()
         try:
-            data = comment_schema.load(request.get_json())
+            data = comment_schema.load(request.get_json())  # only needs "content"
         except ValidationError as err:
             return JsonResponse({"errors": err.messages}, 422)
 
@@ -48,7 +48,7 @@ class CommentItemResource(Resource):
     def put(self, entry_id, comment_id):
         user_id = get_jwt_identity()
         try:
-            data = comment_schema.load(request.get_json())
+            data = comment_schema.load(request.get_json())  # "content"
         except ValidationError as err:
             return JsonResponse({"errors": err.messages}, 422)
 

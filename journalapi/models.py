@@ -1,6 +1,5 @@
 # journalapi/models.py
 from datetime import datetime
-import json
 from extensions import db
 
 class User(db.Model):
@@ -17,11 +16,6 @@ class User(db.Model):
     comments = db.relationship(
         "Comment", backref="author", cascade="all, delete-orphan"
     )
-    # Relationship to track who edited (editors):
-    edit_histories = db.relationship(
-        "EditHistory", backref="editor", cascade="all, delete-orphan"
-    )
-
 
 class JournalEntry(db.Model):
     __tablename__ = "journal_entries"
@@ -30,16 +24,13 @@ class JournalEntry(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     title = db.Column(db.String(200), nullable=False)
     content = db.Column(db.Text, nullable=False)
-    tags = db.Column(db.String, default="[]")  # stored as JSON string
-    sentiment_score = db.Column(db.Float, nullable=True)
+    tags = db.Column(db.String, default="[]")
+    sentiment_score = db.Column(db.Float)
     sentiment_tag = db.Column(db.String, default="[]")
     date = db.Column(db.DateTime, default=datetime.utcnow)
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     comments = db.relationship("Comment", backref="journal_entry", cascade="all, delete-orphan")
-    # Relationship to track all edits:
-    edit_histories = db.relationship("EditHistory", backref="journal_entry", cascade="all, delete-orphan")
-
 
 class Comment(db.Model):
     __tablename__ = "comments"
@@ -50,10 +41,10 @@ class Comment(db.Model):
     content = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
-# NEW MODEL
+# If you want EditHistory, define it here too:
+# If you want EditHistory, define it here:
 class EditHistory(db.Model):
     __tablename__ = "edit_history"
-
     id = db.Column(db.Integer, primary_key=True)
     journal_entry_id = db.Column(db.Integer, db.ForeignKey("journal_entries.id"), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
