@@ -1,4 +1,3 @@
-### 📄 `__init__.py` (app factory)
 import os
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
@@ -10,8 +9,8 @@ def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_mapping(
         SECRET_KEY="dev",
-        SQLALCHEMY_DATABASE_URI="sqlite:///" + os.path.join(app.instance_path, "journal.db"),
-        SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        SQLALCHEMY_DATABASE_URI="sqlite://" + os.path.join(app.instance_path, "journal.db"),
+        SQLALCHEMY_TRACK_MODIFICATIONS=False
     )
 
     if test_config:
@@ -27,7 +26,6 @@ def create_app(test_config=None):
     db.init_app(app)
     JWTManager(app)
 
-    # Import and register blueprints here
     from . import api
     app.register_blueprint(api.api_bp)
 

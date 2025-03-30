@@ -1,24 +1,19 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="journalapi",
+    name="pwp_journalapi",
     version="0.1.0",
-    description="A Flask-based journaling API with JWT authentication and sentiment tagging.",
+    description="A Flask RESTful journaling API.",
     author="Your Name",
-    author_email="your.email@example.com",
-    packages=find_packages(exclude=["tests", "instance"]),
+    packages=find_packages(),
     include_package_data=True,
+    zip_safe=False,
     install_requires=[
-        "Flask",
-        "Flask-JWT-Extended",
-        "Flask-RESTful",
-        "Flask-SQLAlchemy",
-        "Werkzeug",
+        "flask",
+        "flask-restful",
+        "flask-sqlalchemy",
+        "flask-jwt-extended",
+        "werkzeug"
     ],
-    entry_points={
-        "console_scripts": [
-            "pwp-journalapi=pwp_journalapi.app:create_app"
-        ]
-    },
     python_requires='>=3.7',
 )

@@ -157,3 +157,20 @@ For questions or feedback, please contact Daris at [your.email@example.com].
 
 
 
+A RESTful Flask API for journaling. Includes user management, entries, comments, JWT auth.
+
+## Setup
+```bash
+pip install -e .
+export FLASK_APP=pwp_journalapi
+flask run
+```
+
+## CLI
+```bash
+flask init-db
+```
+
+## Testing
+```bash
+pytest --cov=pwp_journalapi tests/

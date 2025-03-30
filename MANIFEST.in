@@ -1,4 +1,3 @@
 include README.md
 recursive-include pwp_journalapi/static *
-recursive-include pwp_journalapi/templates *
-recursive-include pwp_journalapi/schema *
+global-exclude *.pyc

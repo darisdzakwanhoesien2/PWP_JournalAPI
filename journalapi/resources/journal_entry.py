@@ -1,67 +1,55 @@
-from flask_restful import Resource, Api
-from flask import jsonify, request, url_for
-from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
-from journalapi.handlers.journal_entry_handler import JournalEntryHandler
-from journalapi.utils import JsonResponse
+from flask_restful import Resource
+from flask import request
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from ..models import JournalEntry
+from .. import db
+from ..utils import JsonResponse
+import json
 
-class JornalEntriesResource(Resource):
+class JournalEntryListResource(Resource):
     @jwt_required()
     def get(self):
-        user_id = int(get_jwt_identity())
-        entries = JournalEntryService.get_entries(user_id) 
-        return JsonResponse(entries, 200)
+        user_id = get_jwt_identity()
+        entries = JournalEntry.query.filter_by(user_id=user_id).all()
+        return JsonResponse([e.title for e in entries], 200)
+
     @jwt_required()
     def post(self):
+        user_id = get_jwt_identity()
         data = request.get_json()
-        current_user_id = int(get_jwt_identity())
-
-        entry = JournalEntryService.create_entry(
-            user_id=current_user_id,
-            title=data["title"],
-            content=data["content"],
-            tags=data.get("tags", [])
-        )
-
-        return JsonResponse({
-            "message": "Entry created successfully",
-            "entry_id": entry["entry_id"]
-        }, 201)
+        entry = JournalEntry(user_id=user_id, title=data["title"], content=data["content"], tags=json.dumps(data.get("tags", [])))
+        db.session.add(entry)
+        db.session.commit()
+        return JsonResponse({"entry_id": entry.id}, 201)
 
 class JournalEntryResource(Resource):
     @jwt_required()
     def get(self, entry_id):
-        user_id = int(get_jwt_identity())
-        entry = JournalEntryService.get_entry(entry_id)
-
-        if not entry or entry.get("user_id") != user_id:
-            return JsonResponse({"error": "Entry not found"}, 404) 
-
-        return JsonResponse(entry, 200)
+        user_id = get_jwt_identity()
+        entry = JournalEntry.query.get(entry_id)
+        if not entry or entry.user_id != user_id:
+            return JsonResponse({"error": "Not found"}, 404)
+        return JsonResponse({"title": entry.title, "content": entry.content}, 200)
 
     @jwt_required()
     def put(self, entry_id):
-        user_id = int(get_jwt_identity())
+        user_id = get_jwt_identity()
         data = request.get_json()
-
-        updated_entry = JournalEntryService.update_entry(
-            entry_id,
-            title=data.get("title"),
-            content=data.get("content"),
-            tags=data.get("tags")
-        )
-
-        if not updated_entry or updated_entry.get("user_id") != user_id:
-            return JsonResponse({"error": "Entry not found"}, 404) 
-
-        return JsonResponse({
-            "message": "Entry updated successfully", 
-            "entry": updated_entry
-            }, 200)
+        entry = JournalEntry.query.get(entry_id)
+        if not entry or entry.user_id != user_id:
+            return JsonResponse({"error": "Not found"}, 404)
+        entry.title = data["title"]
+        entry.content = data["content"]
+        entry.tags = json.dumps(data.get("tags", []))
+        db.session.commit()
+        return JsonResponse({"message": "Updated"}, 200)
 
     @jwt_required()
     def delete(self, entry_id):
-        user_id = int(get_jwt_identity())
-        if not JournalEntryService.delete_entry(entry_id):
-            return JsonResponse({"error": "Entry not found"}, 404)
-
-        return JsonResponse({"message": "Entry deleted successfully"}, 200)
+        user_id = get_jwt_identity()
+        entry = JournalEntry.query.get(entry_id)
+        if not entry or entry.user_id != user_id:
+            return JsonResponse({"error": "Not found"}, 404)
+        db.session.delete(entry)
+        db.session.commit()
+        return JsonResponse({"message": "Deleted"}, 200)

@@ -1,44 +1,42 @@
-from flask_restful import Resource, Api
-from flask import jsonify, request, url_for
-from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
-from journalapi.handlers.comment_handler import CommentHandler
-from journalapi.utils import JsonResponse
+from flask_restful import Resource
+from flask import request
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from ..models import Comment, JournalEntry
+from .. import db
+from ..utils import JsonResponse
 
-class JournalCommentsResource(Resource):
-    @jwt_required()
-    def post(self, entry_id):
-        data = request.get_json()
-        current_user_id = int(get_jwt_identity())
-
-        if not data or "content" not in data:
-            return JsonResponse({"error": "Missing required fields"}, 400)
-
-        comment = CommentService.add_comment(entry_id, current_user_id, data["content"])
-        return JsonResponse({"message": "Comment added successfully", "comment": comment}, 201)
-
+class CommentCollectionResource(Resource):
     @jwt_required()
     def get(self, entry_id):
-        comments = CommentService.get_comments(entry_id)
-        return JsonResponse(comments, 200)
+        comments = Comment.query.filter_by(journal_entry_id=entry_id).all()
+        return JsonResponse([{"id": c.id, "content": c.content} for c in comments], 200)
 
-class CommentsResource(Resource):
     @jwt_required()
-    def put(self, comment_id):
+    def post(self, entry_id):
+        user_id = get_jwt_identity()
         data = request.get_json()
-        current_user_id = int(get_jwt_identity())
+        comment = Comment(journal_entry_id=entry_id, user_id=user_id, content=data["content"])
+        db.session.add(comment)
+        db.session.commit()
+        return JsonResponse({"comment_id": comment.id}, 201)
 
-        if not data or "content" not in data:
-            return JsonResponse({"error": "Missing required content"}, 400)
-
-        updated_comment = CommentService.update_comment(comment_id, current_user_id, data["content"])
-        if updated_comment:
-            return JsonResponse({"message": "Comment updated", "comment": updated_comment}, 200)
-        return JsonResponse({"error": "Comment not found or unauthorized"}, 404)
+class CommentItemResource(Resource):
+    @jwt_required()
+    def put(self, entry_id, comment_id):
+        user_id = get_jwt_identity()
+        comment = Comment.query.get(comment_id)
+        if not comment or comment.user_id != user_id or comment.journal_entry_id != entry_id:
+            return JsonResponse({"error": "Not found"}, 404)
+        comment.content = request.get_json()["content"]
+        db.session.commit()
+        return JsonResponse({"message": "Updated"}, 200)
 
     @jwt_required()
-    def delete(self, comment_id):
-        current_user_id = int(get_jwt_identity())
-
-        if CommentService.delete_comment(comment_id, current_user_id):
-            return JsonResponse({"message": "Comment deleted"}, 200)
-        return JsonResponse({"error": "Comment not found or unauthorized"}, 404)
+    def delete(self, entry_id, comment_id):
+        user_id = get_jwt_identity()
+        comment = Comment.query.get(comment_id)
+        if not comment or comment.user_id != user_id or comment.journal_entry_id != entry_id:
+            return JsonResponse({"error": "Not found"}, 404)
+        db.session.delete(comment)
+        db.session.commit()
+        return JsonResponse({"message": "Deleted"}, 200)
