@@ -1,9 +1,14 @@
 from flask_restful import Resource
 from flask import request
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from marshmallow import ValidationError
+
 from ..models import Comment
 from .. import db
 from ..utils import JsonResponse
+from ..schemas import CommentSchema
+
+comment_schema = CommentSchema()
 
 class CommentCollectionResource(Resource):
     @jwt_required()
@@ -20,12 +25,12 @@ class CommentCollectionResource(Resource):
 
     @jwt_required()
     def post(self, entry_id):
+        try:
+            data = comment_schema.load(request.get_json())
+        except ValidationError as err:
+            return JsonResponse({"errors": err.messages}, 400)
+
         user_id = get_jwt_identity()
-        data = request.get_json()
-
-        if not data or "content" not in data:
-            return JsonResponse({"error": "Missing content"}, 400)
-
         comment = Comment(journal_entry_id=entry_id, user_id=user_id, content=data["content"])
         db.session.add(comment)
         db.session.commit()
@@ -34,12 +39,12 @@ class CommentCollectionResource(Resource):
 class CommentItemResource(Resource):
     @jwt_required()
     def put(self, entry_id, comment_id):
+        try:
+            data = comment_schema.load(request.get_json())
+        except ValidationError as err:
+            return JsonResponse({"errors": err.messages}, 400)
+
         user_id = get_jwt_identity()
-        data = request.get_json()
-
-        if not data or "content" not in data:
-            return JsonResponse({"error": "Missing content for full replacement"}, 400)
-
         comment = db.session.get(Comment, comment_id)
         if not comment or comment.user_id != user_id or comment.journal_entry_id != entry_id:
             return JsonResponse({"error": "Not found"}, 404)

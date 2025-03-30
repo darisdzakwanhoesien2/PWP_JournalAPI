@@ -1,10 +1,15 @@
 from flask_restful import Resource
 from flask import request
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from marshmallow import ValidationError
+import json
+
 from ..models import JournalEntry
 from .. import db
 from ..utils import JsonResponse
-import json
+from ..schemas import JournalEntrySchema
+
+entry_schema = JournalEntrySchema()
 
 class JournalEntryListResource(Resource):
     @jwt_required()
@@ -22,17 +27,17 @@ class JournalEntryListResource(Resource):
 
     @jwt_required()
     def post(self):
+        try:
+            data = entry_schema.load(request.get_json())
+        except ValidationError as err:
+            return JsonResponse({"errors": err.messages}, 400)
+
         user_id = get_jwt_identity()
-        data = request.get_json()
-
-        if not data or not data.get("title") or not data.get("content"):
-            return JsonResponse({"error": "Missing title or content"}, 400)
-
         entry = JournalEntry(
             user_id=user_id,
             title=data["title"],
             content=data["content"],
-            tags=json.dumps(data.get("tags", []))
+            tags=json.dumps(data["tags"])
         )
         db.session.add(entry)
         db.session.commit()
@@ -59,13 +64,12 @@ class JournalEntryResource(Resource):
 
     @jwt_required()
     def put(self, entry_id):
+        try:
+            data = entry_schema.load(request.get_json())
+        except ValidationError as err:
+            return JsonResponse({"errors": err.messages}, 400)
+
         user_id = get_jwt_identity()
-        data = request.get_json()
-
-        required_fields = ["title", "content", "tags"]
-        if not data or any(f not in data for f in required_fields):
-            return JsonResponse({"error": "Missing required fields for full replacement"}, 400)
-
         entry = db.session.get(JournalEntry, entry_id)
         if not entry or entry.user_id != user_id:
             return JsonResponse({"error": "Not found"}, 404)

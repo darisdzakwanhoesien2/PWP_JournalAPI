@@ -2,25 +2,31 @@ from flask_restful import Resource
 from flask import request
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
+from marshmallow import ValidationError
+
 from ..models import User
 from .. import db
 from ..utils import JsonResponse
+from ..schemas import UserRegisterSchema, UserLoginSchema
+
+register_schema = UserRegisterSchema()
+login_schema = UserLoginSchema()
 
 class UserRegisterResource(Resource):
     def post(self):
-        data = request.get_json()
-        username = data.get("username")
-        email = data.get("email")
-        password = data.get("password")
+        try:
+            data = register_schema.load(request.get_json())
+        except ValidationError as err:
+            return JsonResponse({"errors": err.messages}, 400)
 
-        if not username or not email or not password:
-            return JsonResponse({"error": "Missing required fields"}, 400)
-
-        if User.query.filter_by(email=email).first():
+        if User.query.filter_by(email=data["email"]).first():
             return JsonResponse({"error": "User already exists"}, 400)
 
-        hashed_password = generate_password_hash(password)
-        user = User(username=username, email=email, password=hashed_password)
+        user = User(
+            username=data["username"],
+            email=data["email"],
+            password=generate_password_hash(data["password"])
+        )
         db.session.add(user)
         db.session.commit()
 
@@ -28,19 +34,16 @@ class UserRegisterResource(Resource):
 
 class UserLoginResource(Resource):
     def post(self):
-        data = request.get_json()
-        email = data.get("email")
-        password = data.get("password")
+        try:
+            data = login_schema.load(request.get_json())
+        except ValidationError as err:
+            return JsonResponse({"errors": err.messages}, 400)
 
-        if not email or not password:
-            return JsonResponse({"error": "Missing email or password"}, 400)
-
-        user = User.query.filter_by(email=email).first()
-        if not user or not check_password_hash(user.password, password):
+        user = User.query.filter_by(email=data["email"]).first()
+        if not user or not check_password_hash(user.password, data["password"]):
             return JsonResponse({"error": "Invalid credentials"}, 401)
 
-        token = create_access_token(identity=user.id)
-        return JsonResponse({"token": token}, 200)
+        return JsonResponse({"token": create_access_token(identity=user.id)}, 200)
 
 class UserResource(Resource):
     @jwt_required()
@@ -53,7 +56,11 @@ class UserResource(Resource):
         if not user:
             return JsonResponse({"error": "User not found"}, 404)
 
-        return JsonResponse({"id": user.id, "username": user.username, "email": user.email}, 200)
+        return JsonResponse({
+            "id": user.id,
+            "username": user.username,
+            "email": user.email
+        }, 200)
 
     @jwt_required()
     def put(self, user_id):
