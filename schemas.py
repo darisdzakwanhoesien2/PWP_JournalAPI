@@ -1,3 +1,4 @@
+# schemas.py
 from marshmallow import Schema, fields, validate, EXCLUDE
 
 class UserRegisterSchema(Schema):

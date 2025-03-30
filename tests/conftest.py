@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 from app import create_app
 from extensions import db  # Assuming you defined db in extensions.py
-from models import User, JournalEntry, EditHistory, Comment  # Adjust as needed
+from journalapi.models import User, JournalEntry, Comment
 
 @pytest.fixture(scope="module")
 def test_client():

@@ -1,10 +1,12 @@
+# journalapi/resources/user.py
 from flask_restful import Resource
 from flask import request
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
 from marshmallow import ValidationError
 
-from journalapi.models import db, User
+from extensions import db
+from journalapi.models import User
 from journalapi.utils import JsonResponse
 from schemas import UserRegisterSchema, UserLoginSchema
 

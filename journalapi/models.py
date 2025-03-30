@@ -1,8 +1,8 @@
-import json
+# journalapi/models.py
 from datetime import datetime
-from flask_sqlalchemy import SQLAlchemy
+import json
 
-db = SQLAlchemy()  # We'll override with the one from app.py
+from extensions import db
 
 class User(db.Model):
     __tablename__ = "users"
@@ -22,9 +22,9 @@ class JournalEntry(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     title = db.Column(db.String(200), nullable=False)
     content = db.Column(db.Text, nullable=False)
-    tags = db.Column(db.String, default="[]")  # JSON-encoded list
+    tags = db.Column(db.String, default="[]")
     sentiment_score = db.Column(db.Float)
-    sentiment_tag = db.Column(db.String, default="[]")  # JSON-encoded list
+    sentiment_tag = db.Column(db.String, default="[]")
     date = db.Column(db.DateTime, default=datetime.utcnow)
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

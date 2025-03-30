@@ -1,10 +1,12 @@
+# journalapi/resources/journal_entry.py
 from flask_restful import Resource
 from flask import request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from marshmallow import ValidationError
 import json
 
-from journalapi.models import db, JournalEntry
+from extensions import db
+from journalapi.models import JournalEntry
 from journalapi.utils import JsonResponse
 from schemas import JournalEntrySchema
 
@@ -15,15 +17,15 @@ class JournalEntryListResource(Resource):
     def get(self):
         user_id = get_jwt_identity()
         entries = JournalEntry.query.filter_by(user_id=user_id).all()
-        result = []
+        data = []
         for e in entries:
-            result.append({
+            data.append({
                 "id": e.id,
                 "title": e.title,
                 "tags": json.loads(e.tags),
                 "last_updated": e.last_updated.isoformat() if e.last_updated else None
             })
-        return JsonResponse(result, 200)
+        return JsonResponse(data, 200)
 
     @jwt_required()
     def post(self):
@@ -79,7 +81,6 @@ class JournalEntryResource(Resource):
         entry.content = data["content"]
         entry.tags = json.dumps(data["tags"])
         db.session.commit()
-
         return JsonResponse({"message": "Entry fully replaced"}, 200)
 
     @jwt_required()

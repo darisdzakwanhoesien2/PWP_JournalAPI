@@ -1,9 +1,11 @@
+# journalapi/resources/comment.py
 from flask_restful import Resource
 from flask import request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from marshmallow import ValidationError
 
-from journalapi.models import db, Comment
+from extensions import db
+from journalapi.models import Comment
 from journalapi.utils import JsonResponse
 from schemas import CommentSchema
 
@@ -38,7 +40,6 @@ class CommentCollectionResource(Resource):
         )
         db.session.add(comment)
         db.session.commit()
-
         return JsonResponse({"comment_id": comment.id}, 201)
 
 class CommentItemResource(Resource):

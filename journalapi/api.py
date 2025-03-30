@@ -1,22 +1,23 @@
+# journalapi/api.py
 from flask import Blueprint
 from flask_restful import Api
 
-from .resources.user import UserRegisterResource, UserLoginResource, UserResource
-from .resources.journal_entry import JournalEntryListResource, JournalEntryResource
-from .resources.comment import CommentCollectionResource, CommentItemResource
+from journalapi.resources.user import UserRegisterResource, UserLoginResource, UserResource
+from journalapi.resources.journal_entry import JournalEntryListResource, JournalEntryResource
+from journalapi.resources.comment import CommentCollectionResource, CommentItemResource
 
-api_bp = Blueprint("api", __name__, url_prefix="")  # or url_prefix="/api"
+api_bp = Blueprint("api", __name__, url_prefix="")  # or "/api" if you want
 api = Api(api_bp)
 
-# User routes
+# USER
 api.add_resource(UserRegisterResource, "/users/register")
 api.add_resource(UserLoginResource, "/users/login")
 api.add_resource(UserResource, "/users/<int:user_id>")
 
-# Journal Entry routes
+# JOURNAL ENTRIES
 api.add_resource(JournalEntryListResource, "/entries/")
 api.add_resource(JournalEntryResource, "/entries/<int:entry_id>")
 
-# Comment routes (nested under /entries/<entry_id>/comments)
+# COMMENTS (nested under /entries/<entry_id>/comments)
 api.add_resource(CommentCollectionResource, "/entries/<int:entry_id>/comments")
 api.add_resource(CommentItemResource, "/entries/<int:entry_id>/comments/<int:comment_id>")
