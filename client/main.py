@@ -1,40 +1,13 @@
-# client/main.py
-import typer
-from client.auth import login, register
-from client.journal import list_entries, create_entry
-from client.comments import add_comment, list_comments
+# PWP_JournalAPI/client/main.py
+import typer 
+from auth_cli import auth_app # client.
+from entries_cli import entry_app # client.
+from comments_cli import comment_app # client.
 
-app = typer.Typer()
-
-@app.command()
-def signup():
-    """Register a new user."""
-    register()
-
-@app.command()
-def signin():
-    """Login and save token."""
-    login()
-
-@app.command()
-def entries():
-    """List your journal entries."""
-    list_entries()
-
-@app.command()
-def new():
-    """Create a new journal entry."""
-    create_entry()
-
-@app.command()
-def comment(entry_id: int):
-    """Add a comment to a journal entry."""
-    add_comment(entry_id)
-
-@app.command()
-def comments(entry_id: int):
-    """List comments on a journal entry."""
-    list_comments(entry_id)
+app = typer.Typer(help="Journal API CLI")
+app.add_typer(auth_app, name="auth")
+app.add_typer(entry_app, name="entry")
+app.add_typer(comment_app, name="comment")
 
 if __name__ == "__main__":
     app()

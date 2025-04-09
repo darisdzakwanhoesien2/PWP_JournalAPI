@@ -1,4 +1,4 @@
-# client/token.py
+# PWP_JournalAPI/client/main.py
 import os
 import json
 

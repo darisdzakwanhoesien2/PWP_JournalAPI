@@ -1,7 +1,8 @@
+# PWP_JournalAPI/client/entries_client_cli.py
 import typer
 import requests
 from rich import print
-from client import token
+from PWP_JournalAPI.client import token_utlis
 
 entries_app = typer.Typer(help="Journal Entries")
 
@@ -10,7 +11,7 @@ API_URL = "http://localhost:8000"
 @entries_app.command("list")
 def list_entries():
     """List all your journal entries"""
-    auth = token.get_auth()
+    auth = token_utlis.get_auth()
     if not auth:
         print("[red]❌ Please login first.[/red]")
         raise typer.Exit()
@@ -32,7 +33,7 @@ def create_entry(
     tags: str = typer.Option("")
 ):
     """Create a new journal entry"""
-    auth = token.get_auth()
+    auth = token_utlis.get_auth()
     if not auth:
         print("[red]❌ Please login first.[/red]")
         raise typer.Exit()
