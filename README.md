@@ -319,5 +319,205 @@ Use a diagram tool (like draw.io or Lucidchart) to show the transitions between 
 
 ---
 
-Would you like a draw.io diagram JSON export I can generate for you?  
-Or should we move on to final checklist & submission prep? ✅
+# PWP SPRING 2025
+# Journal API
+
+## Group Information
+* Student 1. Muhammad Ramish (mramish24@student.oulu.fi)
+* Student 2. Name and email
+* Student 3. Name and email
+* Student 4. Name and email
+
+---
+
+## Overview
+The Journal API is a RESTful web service designed to help users manage daily journaling activities. It allows users to create, view, edit, and delete journal entries, perform sentiment analysis on entries, and interact with comments on public or shared entries. The API is built using Flask and secured using JWTs.
+
+---
+
+## 🚀 Features
+- ✅ **User Registration & Login** with hashed passwords
+- ✅ **JWT Authentication**
+- ✅ **CRUD Journal Entries** with tagging and history
+- ✅ **Comments API** per entry
+- ✅ **Modular Flask RESTful API**
+- ✅ **Typer-based Python CLI** for users
+- ✅ **Swagger UI** available at `/apidocs/`
+- ✅ **Production-ready Docker deployment**
+- ✅ **Optional Auxiliary Service** for analytics
+
+---
+
+## 📁 Project Structure
+```bash
+PWP_JournalAPI/
+├── app.py                    # Flask app factory with Swagger & JWT setup
+├── client/                  # Typer-based CLI
+│   ├── main.py              # CLI entry point
+│   ├── auth_cli.py          # Register/Login/Logout
+│   ├── entries_cli.py       # Create/View/Delete entries
+│   ├── comments_cli.py      # Add/View/Delete comments
+│   ├── config.py            # Token file path and API base URL
+│   └── auth.py              # Token helpers
+├── journalapi/              # API modules
+│   ├── resources/           # RESTful resources
+│   ├── models/              # SQLAlchemy models
+│   ├── utils/               # JsonResponse, hypermedia utils
+│   └── api.py               # Blueprint with all routes
+├── docs/
+│   └── openapi.yaml         # Full Swagger spec
+├── Dockerfile
+├── docker-compose.yml
+├── init_db.py               # Initialize database
+└── README.md
+```
+
+---
+
+## 🧪 Quick Start (Local)
+```bash
+# Install deps
+pip install -r requirements.txt
+
+# Init DB (local SQLite)
+python init_db.py
+
+# Start API (dev)
+flask --app app run --port=8000
+
+# Access Swagger UI:
+http://localhost:8000/apidocs/
+```
+
+---
+
+## 🐳 Docker Deployment
+```bash
+# Build and start containers
+docker-compose up --build
+
+# Init DB in container
+docker-compose exec journal-api python init_db.py
+```
+
+---
+
+## 💻 CLI Client (Typer)
+```bash
+cd client/
+
+# Register
+python main.py auth register --username alice --email alice@example.com --password secure123
+
+# Login
+python main.py auth login --email alice@example.com --password secure123
+
+# View entries
+python main.py entry list
+
+# Add entry
+python main.py entry create --title "Test" --content "My first entry" --tags life,personal
+```
+
+---
+
+## 📘 API Documentation
+### 🔗 Live Documentation
+- **Swagger UI**: [http://localhost:8000/apidocs](http://localhost:8000/apidocs)
+- **Raw OpenAPI YAML**: [`docs/openapi.yaml`](./docs/openapi.yaml)
+
+### 🔐 Authentication
+JWT Bearer Token in `Authorization` header:
+```
+Authorization: Bearer <token>
+```
+
+### 📂 Hypermedia `_links`
+Embedded links allow clients to navigate between resources:
+```json
+{
+  "id": 3,
+  "title": "My Journal",
+  "tags": ["reflection", "grateful"],
+  "_links": {
+    "self": { "href": "/entries/3" },
+    "edit": { "href": "/entries/3" },
+    "delete": { "href": "/entries/3" },
+    "comments": { "href": "/entries/3/comments" },
+    "history": { "href": "/entries/3/history" }
+  }
+}
+```
+
+### 📡 Link Relations
+| Resource      | Link Relations                         |
+|---------------|------------------------------------------|
+| `User`        | `self`, `edit`, `delete`                |
+| `JournalEntry`| `self`, `edit`, `delete`, `comments`, `history` |
+| `Comment`     | `self`, `edit`, `delete`                |
+
+### 🚧 Error Handling
+| Code | Meaning          | Example                      |
+|------|------------------|------------------------------|
+| 422  | Validation Error | Missing required field       |
+| 401  | Unauthorized     | Token missing or invalid     |
+| 403  | Forbidden        | User not allowed             |
+| 404  | Not Found        | Resource doesn't exist       |
+
+---
+
+## 📜 API Endpoints
+| Resource Name       | Resource URL                          | Resource Description                                                             | Methods         | Done |
+|---------------------|----------------------------------------|----------------------------------------------------------------------------------|------------------|------|
+| User Management     | `/users/register`                      | Register a new user                                                              | POST             | ✅   |
+|                     | `/users/login`                         | Authenticate a user, return JWT                                                  | POST             | ✅   |
+|                     | `/users/{id}`                          | Get, update, or delete user                                                      | GET, PUT, DELETE | ✅   |
+| Journal Entry       | `/entries/`                            | Create or list user journal entries                                              | POST, GET        | ✅   |
+|                     | `/entries/{entry_id}`                  | Retrieve, update, or delete a specific journal entry                             | GET, PUT, DELETE | ✅   |
+| Comments            | `/entries/{entry_id}/comments`         | Add or list comments for an entry                                                | POST, GET        | ✅   |
+|                     | `/comments/{comment_id}`               | Update or delete a comment                                                       | PUT, DELETE      | ✅   |
+| Edit History        | `/entries/{entry_id}/history`          | View edit history of a journal entry                                             | GET              | ✅   |
+
+---
+
+## 📦 Dependencies
+- **Flask**, **SQLAlchemy**: Core web & ORM
+- **Flask-JWT-Extended**: Token auth
+- **Typer**, **Requests**: CLI client
+- **Pytest**: Functional testing
+
+---
+
+## 🔧 Auxiliary Service (Optional)
+> Example: Run analytics/stats in background
+```bash
+python auxiliary_service.py
+```
+
+---
+
+## 🧪 Testing
+```bash
+pytest --cov=journalapi tests/
+```
+
+---
+
+## 📝 License
+MIT License © 2025 Oulu PWP Team
+
+---
+
+## ✉️ Contact
+For feedback, contact Daris at daris@example.com
+
+---
+
+## ✅ Submission Checklist
+- [x] REST API working
+- [x] JWT Secured
+- [x] Swagger & CLI
+- [x] Docker Ready
+- [x] Wiki + Mermaid Diagrams
+- [x] Auxiliary Service Ready
+
