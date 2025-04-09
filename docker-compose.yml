@@ -1,14 +1,32 @@
-# docker-compose.yml
-version: '3.8'
+version: '3.9'
 
 services:
-  web:
+  journal-api:
     build: .
+    container_name: journal-api
     ports:
-      - "5000:5000"
+      - "8000:8000"
     volumes:
       - .:/app
-      - ./instance:/app/instance
+    command: gunicorn -w 1 -b 0.0.0.0:8000 wsgi:app
     environment:
-      FLASK_ENV: production
-      SECRET_KEY: "your-production-secret-key"
+      - FLASK_DEBUG=1
+      - FLASK_ENV=development
+    depends_on:
+      - db
+
+  db:
+    image: postgres:13
+    container_name: journal-db
+    restart: always
+    environment:
+      POSTGRES_USER: journal_user
+      POSTGRES_PASSWORD: journal_pass
+      POSTGRES_DB: journal_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  pgdata:

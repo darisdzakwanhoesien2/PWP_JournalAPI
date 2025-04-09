@@ -3,7 +3,7 @@
 
 import os
 import json
-from client.config import TOKEN_FILE
+from config import TOKEN_FILE
 
 def save_token(token: str):
     """

@@ -1,4 +1,10 @@
-swagger: "2.0"
+import os
+
+# Create the docs directory if it doesn't exist
+os.makedirs("docs", exist_ok=True)
+
+# Define the Swagger 2.0 openapi.yaml content
+openapi_yaml_content = """swagger: "2.0"
 info:
   title: PWP Journal API
   description: API documentation for the journaling platform.
@@ -104,3 +110,9 @@ paths:
           description: Entry created
         422:
           description: Validation error
+"""
+
+# Write the content to docs/openapi.yaml
+with open("docs/openapi.yaml", "w") as f:
+    f.write(openapi_yaml_content)
+

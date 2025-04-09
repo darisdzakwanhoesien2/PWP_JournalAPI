@@ -1,25 +1,26 @@
-from pathlib import Path
+import os
 
-def export_code_and_directory_list(root_directory=".", code_file="code.txt", list_file="directories.txt"):
-    root = Path(root_directory)
-    # Get all Python files recursively under the root_directory
-    python_files = list(root.rglob("*.py"))
-    
-    # Open both output files for writing
-    with open(code_file, "w", encoding="utf-8") as code_out, open(list_file, "w", encoding="utf-8") as list_out:
-        for file_path in python_files:
-            # Write just the path in the directory list file
-            list_out.write(f"{file_path}\n")
-            
-            # For the code file, include a header with the file path, then the file's contents
-            code_out.write(f"# {file_path}\n")
-            try:
-                content = file_path.read_text(encoding="utf-8")
-            except Exception as e:
-                content = f"# Error reading {file_path}: {e}"
-            code_out.write(content)
-            code_out.write("\n\n")  # Separate individual files with newlines
+def write_python_files_to_txt(root_directory=".", output_file="output.txt"):
+    with open(output_file, "w", encoding="utf-8") as outfile:
+        # Walk through the root directory and all subdirectories
+        for dirpath, dirnames, filenames in os.walk(root_directory):
+            for filename in filenames:
+                if filename.endswith(".py"):
+                    # Construct the full file path
+                    file_path = os.path.join(dirpath, filename)
+                    # Write the file path to the output file as a comment header
+                    outfile.write(f"# {file_path}\n")
+                    try:
+                        # Read the file content
+                        with open(file_path, "r", encoding="utf-8") as infile:
+                            content = infile.read()
+                        outfile.write(content)
+                    except Exception as e:
+                        # In case of any errors, write an error message
+                        outfile.write(f"# Error reading {file_path}: {e}\n")
+                    # Add a couple of newlines as a separator between files
+                    outfile.write("\n\n")
 
 if __name__ == "__main__":
-    # Adjust the 'root_directory' if your repository root is different
-    export_code_and_directory_list(root_directory=".", code_file="code.txt", list_file="directories.txt")
+    # Adjust the root directory if your repo is elsewhere
+    write_python_files_to_txt(root_directory=".", output_file="output.txt")

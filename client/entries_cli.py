@@ -2,7 +2,7 @@
 import typer
 import requests
 from rich import print
-from client import auth, config
+import auth, config
 
 entry_app = typer.Typer(help="Manage journal entries")
 
