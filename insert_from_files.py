@@ -5,31 +5,27 @@ from models import User, JournalEntry, EditHistory, Comment
 from datetime import datetime
 import json
 from datetime import datetime, timezone
+from werkzeug.security import generate_password_hash
 
 app = create_app()
 
 def list_to_json(lst):
-    """Converts list to JSON string."""
     return json.dumps(lst)
 
 def insert_users(file_path):
-    """Reads users from file and inserts them into the database, avoiding duplicates."""
     with open(file_path, "r") as file, app.app_context():
         reader = csv.reader(file)
         for row in reader:
             username, email, password = [field.strip() for field in row]
-
-            # Check if user already exists
-            existing_user = db.session.query(User).filter_by(email=email).first()
-            if existing_user:
+            if db.session.query(User).filter_by(email=email).first():
                 print(f"⚠️ Skipping duplicate user: {email}")
                 continue
-
-            user = User(username=username, email=email, password=password)
+            hashed_pw = generate_password_hash(password)
+            user = User(username=username, email=email, password=hashed_pw)
             db.session.add(user)
-
         db.session.commit()
     print("✅ Users added successfully!")
+
 
 def insert_journal_entries(file_path):
     """Reads journal entries from file and inserts them into the database."""
