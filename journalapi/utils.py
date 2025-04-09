@@ -1,4 +1,4 @@
-# journalapi/utils.py
+# PWP_JournalAPI/journalapi/utils.py
 import json
 from flask import Response
 

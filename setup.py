@@ -1,3 +1,4 @@
+# PWP_JournalAPI/schemas.py
 from setuptools import setup, find_packages
 
 setup(

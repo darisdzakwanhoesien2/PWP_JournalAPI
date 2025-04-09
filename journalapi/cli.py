@@ -1,4 +1,4 @@
-# journalapi/cli.py
+# PWP_JournalAPI/journalapi/cli.py
 import click
 from flask.cli import with_appcontext
 from extensions import db

@@ -1,4 +1,5 @@
-# tests/test_journal_entry_routes.py
+# PWP_JournalAPI/tests/test_journal_entry_routes.py
+
 import unittest
 import json
 from app import create_app

@@ -1,4 +1,4 @@
-# journalapi/api.py
+# PWP_JournalAPI/journalapi/api.py
 from flask import Blueprint
 from flask_restful import Api
 

@@ -1,4 +1,4 @@
-# tests/conftest.py
+# PWP_JournalAPI/tests/conftest.py
 import pytest
 import os
 import sys

@@ -1,3 +1,5 @@
+# PWP_JournalAPI/journalapi/models.py
+
 from datetime import datetime
 import json
 from extensions import db

@@ -1,5 +1,4 @@
-# journalapi/resources/user.py
-# journalapi/resources/user.py
+# PWP_JournalAPI/resources/user.py
 
 from flask_restful import Resource
 from flask import request
