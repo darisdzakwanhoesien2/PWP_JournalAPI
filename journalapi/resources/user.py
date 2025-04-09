@@ -1,10 +1,11 @@
 # PWP_JournalAPI/resources/user.py
 
 from flask_restful import Resource
-from flask import request
+from flask import request, current_app
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
 from marshmallow import ValidationError
+import traceback
 
 from extensions import db
 from journalapi.models import User
@@ -17,29 +18,39 @@ login_schema = UserLoginSchema()
 class UserRegisterResource(Resource):
     def post(self):
         """
-        Registers a new user with a unique email. 
-        Marshmallow validates required fields (username, email, password).
-        Returns 201 on success, or 422 if validation fails.
+        Registers a new user with a unique username and email.
+        Returns 201 on success, 400 on duplicate, 422 on validation, 500 on internal error.
         """
         try:
+            # 🧪 Schema validation
             data = register_schema.load(request.get_json())
+
+            # 🚫 Duplicate email
+            if User.query.filter_by(email=data["email"]).first():
+                return JsonResponse({"error": "Email already registered"}, 400)
+
+            # 🚫 Duplicate username
+            if User.query.filter_by(username=data["username"]).first():
+                return JsonResponse({"error": "Username already taken"}, 400)
+
+            # ✅ Create user
+            hashed_password = generate_password_hash(data["password"])
+            user = User(
+                username=data["username"],
+                email=data["email"],
+                password=hashed_password
+            )
+            db.session.add(user)
+            db.session.commit()
+
+            return JsonResponse({"message": "User registered successfully"}, 201)
+
         except ValidationError as err:
             return JsonResponse({"errors": err.messages}, 422)
 
-        if User.query.filter_by(email=data["email"]).first():
-            return JsonResponse({"error": "User already exists"}, 400)
-
-        hashed_password = generate_password_hash(data["password"])
-        user = User(
-            username=data["username"], 
-            email=data["email"], 
-            password=hashed_password
-        )
-        db.session.add(user)
-        db.session.commit()
-
-        return JsonResponse({"message": "User registered successfully"}, 201)
-
+        except Exception:
+            current_app.logger.error(traceback.format_exc())
+            return JsonResponse({"error": "Internal server error"}, 500)
 
 class UserLoginResource(Resource):
     def post(self):

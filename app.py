@@ -11,6 +11,7 @@ def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
 
     app.config.from_mapping(
+        DEBUG=True,
         SECRET_KEY="dev",
         SQLALCHEMY_DATABASE_URI="sqlite:///" + os.path.join(app.instance_path, "journal.db"),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
