@@ -4,7 +4,6 @@ from flask import request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from marshmallow import ValidationError
 import json
-
 from extensions import db
 from journalapi.models import JournalEntry
 from journalapi.utils import JsonResponse
@@ -42,7 +41,6 @@ class JournalEntryListResource(Resource):
             data = entry_schema.load(request.get_json())
         except ValidationError as err:
             return JsonResponse({"errors": err.messages}, 422)
-
         new_entry = JournalEntry(
             user_id=user_id,
             title=data["title"],
@@ -79,11 +77,9 @@ class JournalEntryResource(Resource):
             data = entry_schema.load(request.get_json())
         except ValidationError as err:
             return JsonResponse({"errors": err.messages}, 422)
-
         entry = db.session.get(JournalEntry, entry_id)
         if not entry or entry.user_id != user_id:
             return JsonResponse({"error": "Not found"}, 404)
-
         entry.title = data["title"]
         entry.content = data["content"]
         entry.tags = json.dumps(data["tags"])

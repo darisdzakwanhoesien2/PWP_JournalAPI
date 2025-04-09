@@ -1,14 +1,14 @@
+# journalapi/handlers/comment_handler.py
 from journalapi import db
 from journalapi.models import Comment
 
 class CommentHandler:
-
     @staticmethod
     def add_comment(entry_id, user_id, content):
         comment = Comment(journal_entry_id=entry_id, user_id=user_id, content=content)
         db.session.add(comment)
         db.session.commit()
-        db.session.refresh(comment)  # Ensures comment remains attached
+        db.session.refresh(comment)
         return comment.to_dict()
 
     @staticmethod
@@ -22,7 +22,7 @@ class CommentHandler:
         if comment and comment.user_id == user_id:
             comment.content = content
             db.session.commit()
-            db.session.refresh(comment)  # Ensures updated data is returned
+            db.session.refresh(comment)
             return comment.to_dict()
         return None
 

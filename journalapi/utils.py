@@ -5,14 +5,11 @@ from flask import Response
 def JsonResponse(body, status=200, mimetype="application/json"):
     if isinstance(body, dict) and "_links" not in body:
         if "id" in body:
-            # Inject common links based on resource type
             resource_type = detect_resource_type(body)
             body["_links"] = generate_links(resource_type, body["id"])
     return Response(json.dumps(body), status=status, mimetype=mimetype)
 
-
 def detect_resource_type(data):
-    # Basic logic to determine resource type
     if "title" in data:
         return "entry"
     elif "email" in data:
@@ -20,7 +17,6 @@ def detect_resource_type(data):
     elif "content" in data and "journal_entry_id" in data:
         return "comment"
     return None
-
 
 def generate_links(resource_type, id_):
     if resource_type == "entry":
