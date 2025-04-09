@@ -3,17 +3,14 @@ info:
   title: PWP Journal API
   description: RESTful journaling platform with JWT auth, hypermedia, and modular routes.
   version: "1.0.0"
-
 servers:
   - url: http://localhost:8000
-
 components:
   securitySchemes:
     BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-
   schemas:
     UserRegistration:
       type: object
@@ -30,7 +27,6 @@ components:
           type: string
           format: password
           example: SecretPassword123
-
     UserLogin:
       type: object
       required: [email, password]
@@ -41,14 +37,12 @@ components:
         password:
           type: string
           example: SecretPassword123
-
     JWTToken:
       type: object
       properties:
         token:
           type: string
           example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-
     JournalEntryInput:
       type: object
       required: [title, content]
@@ -64,7 +58,6 @@ components:
           items:
             type: string
           example: [personal, daily]
-
     CommentInput:
       type: object
       required: [content]
@@ -72,7 +65,6 @@ components:
         content:
           type: string
           example: Great entry!
-
     HypermediaLinks:
       type: object
       properties:
@@ -101,7 +93,6 @@ components:
           properties:
             href:
               type: string
-
 paths:
   /users/register:
     post:
@@ -120,7 +111,6 @@ paths:
           description: Duplicate email or username
         '422':
           description: Validation error
-
   /users/login:
     post:
       summary: Login and retrieve a JWT token
@@ -140,7 +130,6 @@ paths:
                 $ref: '#/components/schemas/JWTToken'
         '401':
           description: Invalid credentials
-
   /entries/:
     get:
       summary: Get all journal entries for the current user
@@ -150,7 +139,6 @@ paths:
       responses:
         '200':
           description: List of journal entries with hypermedia links
-
     post:
       summary: Create a new journal entry
       tags: [Journal Entries]
@@ -167,7 +155,6 @@ paths:
           description: Entry created
         '422':
           description: Validation error
-
   /entries/{entry_id}:
     get:
       summary: Get a specific journal entry
@@ -185,7 +172,6 @@ paths:
           description: Journal entry with hypermedia
         '404':
           description: Entry not found
-
     put:
       summary: Update a journal entry
       tags: [Journal Entries]
@@ -208,7 +194,6 @@ paths:
           description: Entry updated
         '404':
           description: Entry not found
-
     delete:
       summary: Delete a journal entry
       tags: [Journal Entries]
@@ -225,7 +210,6 @@ paths:
           description: Entry deleted
         '404':
           description: Entry not found
-
   /entries/{entry_id}/comments:
     get:
       summary: List comments for an entry
@@ -241,7 +225,6 @@ paths:
       responses:
         '200':
           description: List of comments
-
     post:
       summary: Add a comment to an entry
       tags: [Comments]
@@ -264,7 +247,6 @@ paths:
           description: Comment created
         '422':
           description: Validation error
-
   /entries/{entry_id}/comments/{comment_id}:
     put:
       summary: Update a comment
@@ -293,7 +275,6 @@ paths:
           description: Comment updated
         '404':
           description: Not found
-
     delete:
       summary: Delete a comment
       tags: [Comments]
@@ -315,7 +296,6 @@ paths:
           description: Comment deleted
         '404':
           description: Not found
-
   /entries/{entry_id}/history:
     get:
       summary: View edit history for a journal entry
