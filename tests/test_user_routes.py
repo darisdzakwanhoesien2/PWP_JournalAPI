@@ -73,6 +73,38 @@ class TestUserRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertIn("deleted successfully", data["message"].lower())
+        
+    def test_get_other_user(self):
+        # Should return 403 Forbidden
+        response = self.client.get(
+            f"/users/{self.user_id + 1}",  # Different user ID
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_register_existing_email(self):
+        response = self.client.post("/users/register", json={
+            "username": "newuser",
+            "email": "test@example.com",  # Already exists
+            "password": "password123"
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("already exists", response.get_json()["error"])
+
+    def test_invalid_login(self):
+        response = self.client.post("/users/login", json={
+            "email": "wrong@example.com",
+            "password": "invalid"
+        })
+        self.assertEqual(response.status_code, 401)
+    # In JournalEntryListResource test
+    def test_entry_list_hypermedia(self):
+        response = self.client.get("/entries/",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        data = response.get_json()
+        self.assertIn("_links", data[0])
+        self.assertIn("comments", data[0]["_links"])
 
 if __name__ == "__main__":
     unittest.main()

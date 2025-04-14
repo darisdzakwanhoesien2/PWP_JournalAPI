@@ -41,6 +41,49 @@ class TestJournalEntryRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         data = json.loads(response.data)
         self.assertIn("entry_id", data)
+    def test_get_all_entries(self):
+        # Create 2 test entries first
+        self._create_entry()
+        self._create_entry()
+        
+        response = self.client.get("/entries/",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(len(data), 2)
+        self.assertIn("_links", data[0])  # Verify hypermedia
+
+    def test_get_nonexistent_entry(self):
+        response = self.client.get("/entries/999",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_entry_invalid_data(self):
+        entry = self._create_entry()
+        response = self.client.put(f"/entries/{entry['entry_id']}",
+            json={"title": ""},  # Invalid empty title
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("Title cannot be empty", str(response.data))
+
+    def _create_entry(self):
+        response = self.client.post("/entries/", json={
+            "title": "Test Entry",
+            "content": "Test Content",
+            "tags": ["test"]
+        }, headers={"Authorization": f"Bearer {self.token}"})
+        return response.get_json()
+    # In JournalEntryListResource test
+    def test_entry_list_hypermedia(self):
+        response = self.client.get("/entries/",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        data = response.get_json()
+        self.assertIn("_links", data[0])
+        self.assertIn("comments", data[0]["_links"])
 
 if __name__ == "__main__":
     unittest.main()

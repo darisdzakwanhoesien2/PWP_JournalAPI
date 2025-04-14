@@ -131,6 +131,58 @@ class TestCommentRoutes(unittest.TestCase):
         self.assertEqual(get_resp.status_code, 200)
         data = get_resp.get_json()
         self.assertFalse(any(c["id"] == comment_id for c in data))
+    def test_comment_foreign_entry(self):
+        # Try to comment on non-existent entry
+        response = self.client.post("/entries/999/comments",
+            json={"content": "Invalid comment"},
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_others_comment(self):
+        # Create second user
+        with self.app.app_context():
+            user2 = User(username="user2", email="user2@example.com", 
+                        password=generate_password_hash("pass"))
+            db.session.add(user2)
+            db.session.commit()
+            token2 = create_access_token(identity=str(user2.id))
+
+        # User2 tries to edit user1's comment
+        comment = self._create_comment()
+        response = self.client.put(
+            f"/entries/{self.entry_id}/comments/{comment['comment_id']}",
+            json={"content": "Hacked!"},
+            headers={"Authorization": f"Bearer {token2}"}
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_comment_hypermedia_links(self):
+        comment = self._create_comment()
+        response = self.client.get(
+            f"/entries/{self.entry_id}/comments",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        data = response.get_json()
+        self.assertIn("_links", data[0])
+        self.assertEqual(data[0]["_links"]["self"]["href"], 
+                    f"/entries/{self.entry_id}/comments/{comment['comment_id']}")
+
+    def _create_comment(self):
+        response = self.client.post(
+            f"/entries/{self.entry_id}/comments",
+            json={"content": "Test comment"},
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        return response.get_json()
+        # In JournalEntryListResource test
+    def test_entry_list_hypermedia(self):
+        response = self.client.get("/entries/",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        data = response.get_json()
+        self.assertIn("_links", data[0])
+        self.assertIn("comments", data[0]["_links"])
 
 if __name__ == "__main__":
     unittest.main()
