@@ -35,14 +35,26 @@ The professor suggested to move to MariaDB or MySQL database instead of current 
 
 
 ## Meeting 3.
-* **DATE:**
-* **ASSISTANTS:**
+* **DATE: 18th March 2025**
+* **ASSISTANTS: Mika Oja**
 
 ### Minutes
-*Summary of what was discussed during the meeting*
+We went over Deliverable 4 with Mika. For the Wiki Report, he pointed out that the resource table is incomplete—each endpoint should be listed as a separate resource. Also, the URLs need to be improved so that each comment link includes the entry it belongs to. He mentioned that the PUT method should fully replace the resource, not just update parts of it. Lastly, the login function seems to keep some state, which shouldn't happen in a stateless system.
+
+For the Basic Implementation, he said the folder structure isn’t correct and includes files that shouldn’t be in the repo. Some classes in the service modules are unnecessary. There are also problems with code quality (we should run pylint and fix issues), no documentation yet, and no test coverage. Although the run instructions are fine, the implementation couldn’t be fully tested because the tests aren’t running properly yet.
+
+In the Extras section, only authentication is done. Things like URL converters, schema validation, and caching are still missing.
 
 ### Action points
-*List here the actions points discussed with assistants*
+- List each endpoint separately in the resource table.
+- Update comment URLs to include their parent entry.
+- Change the PUT method to fully replace the resource.
+- Make sure the login process is stateless.
+- Fix the folder structure and remove any extra files or unnecessary classes.
+- Improve code quality using pylint.
+- Add documentation.
+- Set up test coverage and make sure tests can run.
+- Add URL converters, schema validation, and caching support.
 
 
 
