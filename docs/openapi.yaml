@@ -7,7 +7,7 @@ info:
     Hypermedia controls are used to enhance navigation between resources.
   contact:
     name: Daris Dzakwan Hoesien
-    email: your-email@example.com
+    email: daris@example.com
 servers:
   - url: http://localhost:5000
 
@@ -206,6 +206,12 @@ paths:
       summary: Update user info
       security:
         - bearerAuth: []
+      parameters:
+        - in: path
+          name: user_id
+          schema:
+            type: integer
+          required: true
       requestBody:
         required: true
         content:
@@ -228,6 +234,12 @@ paths:
       summary: Delete user account
       security:
         - bearerAuth: []
+      parameters:
+        - in: path
+          name: user_id
+          schema:
+            type: integer
+          required: true
       responses:
         200:
           description: User deleted
@@ -310,6 +322,12 @@ paths:
       summary: Update a journal entry
       security:
         - bearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
       requestBody:
         required: true
         content:
@@ -330,6 +348,12 @@ paths:
       summary: Delete a journal entry
       security:
         - bearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
       responses:
         200:
           description: Entry deleted
@@ -341,6 +365,12 @@ paths:
       summary: Get comments on a journal entry
       security:
         - bearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
       responses:
         200:
           description: List of comments
@@ -357,6 +387,12 @@ paths:
       summary: Add a comment to an entry
       security:
         - bearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
       requestBody:
         required: true
         content:
@@ -380,6 +416,17 @@ paths:
       summary: Update a comment
       security:
         - bearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: comment_id
+          in: path
+          required: true
+          schema:
+            type: integer
       requestBody:
         required: true
         content:
@@ -398,6 +445,17 @@ paths:
       summary: Delete a comment
       security:
         - bearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: comment_id
+          in: path
+          required: true
+          schema:
+            type: integer
       responses:
         200:
           description: Comment deleted
@@ -409,6 +467,12 @@ paths:
       summary: Get edit history for an entry
       security:
         - bearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
       responses:
         200:
           description: List of edits
