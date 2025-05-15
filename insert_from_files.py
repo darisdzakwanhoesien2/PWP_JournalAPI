@@ -1,10 +1,9 @@
 import csv
 from app import create_app
 from extensions import db
-from models import User, JournalEntry, EditHistory, Comment
-from datetime import datetime
-import json
+from journalapi.models import User, JournalEntry, EditHistory, Comment
 from datetime import datetime, timezone
+import json
 from werkzeug.security import generate_password_hash
 
 app = create_app()
@@ -26,7 +25,6 @@ def insert_users(file_path):
         db.session.commit()
     print("✅ Users added successfully!")
 
-
 def insert_journal_entries(file_path):
     """Reads journal entries from file and inserts them into the database."""
     with open(file_path, "r") as file, app.app_context():
@@ -40,7 +38,7 @@ def insert_journal_entries(file_path):
                 tags=list_to_json([tag.strip() for tag in tags.split(",")]),
                 sentiment_score=float(sentiment_score),
                 sentiment_tag=list_to_json([tag.strip() for tag in sentiment_tag.split(",")]),
-                last_updated = datetime.now(timezone.utc)  # Correct way to get current UTC time: Depreciated# last_updated=datetime.utcnow()
+                last_updated=datetime.now(timezone.UTC)  # Already updated
             )
             db.session.add(entry)
         db.session.commit()
@@ -55,7 +53,7 @@ def insert_edit_history(file_path):
             edit = EditHistory(
                 journal_entry_id=int(journal_entry_id),
                 user_id=int(user_id),
-                edited_at=datetime.now(timezone.utc), #datetime.utcnow(),
+                edited_at=datetime.now(timezone.UTC),  # Already updated
                 previous_content=previous_content.strip(),
                 new_content=new_content.strip()
             )
@@ -80,7 +78,7 @@ def insert_comments(file_path):
                 journal_entry_id=journal_entry_id,
                 user_id=user_id,
                 content=content,
-                timestamp=datetime.utcnow()
+                timestamp=datetime.now(timezone.UTC)  # Updated
             )
             db.session.add(comment)
 

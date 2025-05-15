@@ -4,13 +4,23 @@ import subprocess
 import unittest
 import re
 import time
+import sys  # Added import
 from client.config import TOKEN_FILE
 
 class TestJournalCLIFlow(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # Reset the database for a clean test environment.
-        subprocess.run(["python", "init_db.py"], check=True)
+        # Use the virtual environment's Python executable
+        venv_python = os.path.join(os.path.dirname(sys.executable), "python.exe") if os.name == "nt" else os.path.join(os.path.dirname(sys.executable), "python")
+        # Reset the database for a clean test environment
+        result = subprocess.run(
+            [venv_python, "init_db.py"],
+            capture_output=True,  # Capture output for debugging
+            text=True,  # Return strings instead of bytes
+            check=True
+        )
+        print("DEBUG [setUpClass] init_db.py stdout:", result.stdout)
+        print("DEBUG [setUpClass] init_db.py stderr:", result.stderr)
 
     def run_cli(self, command):
         """
@@ -22,8 +32,9 @@ class TestJournalCLIFlow(unittest.TestCase):
             stderr=subprocess.PIPE,
             shell=True,
             env=dict(os.environ, PYTHONPATH="."),
+            text=True  # Ensure text output
         )
-        return result.stdout.decode(), result.stderr.decode()
+        return result.stdout, result.stderr
 
     def test_cli_end_to_end(self):
         # Use a dynamic email to avoid duplicate user conflicts.

@@ -55,7 +55,7 @@ class UserResource(Resource):
         current_user_id = get_jwt_identity()
         if str(user_id) != current_user_id:
             return JsonResponse({"error": "Unauthorized"}, 403)
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)  # Updated
         if not user:
             return JsonResponse({"error": "User not found"}, 404)
         return JsonResponse({"id": user.id, "username": user.username, "email": user.email}, 200)
@@ -65,7 +65,7 @@ class UserResource(Resource):
         current_user_id = get_jwt_identity()
         if str(user_id) != current_user_id:
             return JsonResponse({"error": "Unauthorized"}, 403)
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)  # Updated
         if not user:
             return JsonResponse({"error": "User not found"}, 404)
         data = request.get_json() or {}
@@ -82,8 +82,8 @@ class UserResource(Resource):
     def delete(self, user_id):
         current_user_id = get_jwt_identity()
         if str(user_id) != current_user_id:
-            return JsonResponse({"error": "Unauthorized"}, 403)
-        user = User.query.get(user_id)
+            return JsonResponse({"error": " unauthorized"}, 403)
+        user = db.session.get(User, user_id)  # Updated
         if not user:
             return JsonResponse({"error": "User not found"}, 404)
         db.session.delete(user)

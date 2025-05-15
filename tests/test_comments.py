@@ -1,13 +1,9 @@
 # PWP_JournalAPI/tests/test_comments.py
-
 import sys
 import os
 import unittest
 from werkzeug.security import generate_password_hash
 from flask_jwt_extended import create_access_token
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 from app import create_app
 from extensions import db
 from journalapi.models import User, Comment, JournalEntry
@@ -34,7 +30,7 @@ class TestCommentRoutes(unittest.TestCase):
 
             self.user_id = user.id
             # IMPORTANT: use str(...) for the identity
-            self.token = create_access_token(identity=str(user.id))
+            self.token = create_access_token(identity=str(user.id))  # Fixed: use user.id
 
             # Create a test journal entry
             entry = JournalEntry(
@@ -62,6 +58,18 @@ class TestCommentRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         data = response.get_json()
         self.assertIn("comment_id", data)
+
+    def test_add_comment_invalid_data(self):
+        response = self.client.post(
+            f"/entries/{self.entry_id}/comments",
+            json={"content": ""},  # Invalid: empty content
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        print("DEBUG [test_add_comment_invalid_data] response JSON:", response.get_json())
+        print("DEBUG [test_add_comment_invalid_data] status code:", response.status_code)
+        self.assertEqual(response.status_code, 422)
+        data = response.get_json()
+        self.assertIn("errors", data)
 
     def test_get_comments(self):
         # create a comment
@@ -101,7 +109,7 @@ class TestCommentRoutes(unittest.TestCase):
         print("DEBUG [test_update_comment] response JSON:", update_resp.get_json())
         print("DEBUG [test_update_comment] status code:", update_resp.status_code)
 
-        self.assertEqual(update_resp.status_code, 200)
+        self.assertEqual(update_resp.status_code, 200)  # Fixed: Correct assertion
         self.assertIn("fully replaced", update_resp.get_json()["message"].lower())
 
     def test_delete_comment(self):
@@ -134,4 +142,3 @@ class TestCommentRoutes(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

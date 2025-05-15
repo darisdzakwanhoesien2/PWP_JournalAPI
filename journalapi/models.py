@@ -1,6 +1,5 @@
 # PWP_JournalAPI/journalapi/models.py
-# journalapi/models.py
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 from extensions import db
 
@@ -27,8 +26,8 @@ class JournalEntry(db.Model):
     tags = db.Column(db.String, default="[]")
     sentiment_score = db.Column(db.Float)
     sentiment_tag = db.Column(db.String, default="[]")
-    date = db.Column(db.DateTime, default=datetime.utcnow)
-    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    date = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))  # Updated
+    last_updated = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))  # Updated
 
     comments = db.relationship("Comment", backref="journal_entry", cascade="all, delete-orphan")
     edit_histories = db.relationship("EditHistory", backref="journal_entry", cascade="all, delete-orphan")
@@ -51,7 +50,7 @@ class Comment(db.Model):
     journal_entry_id = db.Column(db.Integer, db.ForeignKey("journal_entries.id"), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     content = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))  # Updated
 
     def to_dict(self):
         return {
@@ -67,7 +66,7 @@ class EditHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     journal_entry_id = db.Column(db.Integer, db.ForeignKey("journal_entries.id"), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    edited_at = db.Column(db.DateTime, default=datetime.utcnow)
+    edited_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))  # Updated
     previous_content = db.Column(db.Text, nullable=False)
     new_content = db.Column(db.Text, nullable=False)
 
