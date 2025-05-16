@@ -186,6 +186,63 @@ class TestJournalEntryRoutes(unittest.TestCase):
         data = response.get_json()
         self.assertIn("errors", data)
 
+    def test_update_entry_invalid_data(self):
+        create_response = self.client.post(
+            "/entries/",
+            json={
+                "title": "Test Entry",
+                "content": "Testing journal entry creation",
+                "tags": ["test", "journal"]
+            },
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(create_response.status_code, 201)
+        entry_id = create_response.get_json()["entry_id"]
+
+        # Test with completely invalid data
+        response = self.client.put(
+            f"/entries/{entry_id}",
+            json={
+                "title": "",  # Invalid: empty title
+                "content": "",  # Invalid: empty content
+                "tags": [123]  # Invalid: non-string tag
+            },
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        print("DEBUG [test_update_entry_invalid_data] response JSON:", response.get_json())
+        print("DEBUG [test_update_entry_invalid_data] status code:", response.status_code)
+        self.assertEqual(response.status_code, 422)
+        data = response.get_json()
+        self.assertIn("errors", data)
+
+    def test_update_entry_invalid_tags(self):
+        create_response = self.client.post(
+            "/entries/",
+            json={
+                "title": "Test Entry",
+                "content": "Testing journal entry creation",
+                "tags": ["test", "journal"]
+            },
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(create_response.status_code, 201)
+        entry_id = create_response.get_json()["entry_id"]
+
+        response = self.client.put(
+            f"/entries/{entry_id}",
+            json={
+                "title": "Valid Title",
+                "content": "Valid Content",
+                "tags": [None, "", 123]  # Invalid: None, empty, and non-string
+            },
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        print("DEBUG [test_update_entry_invalid_tags] response JSON:", response.get_json())
+        print("DEBUG [test_update_entry_invalid_tags] status code:", response.status_code)
+        self.assertEqual(response.status_code, 422)
+        data = response.get_json()
+        self.assertIn("errors", data)
+
     def test_delete_entry(self):
         # First, create an entry
         create_response = self.client.post(
@@ -251,6 +308,112 @@ class TestJournalEntryRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         data = response.get_json()
         self.assertIn("error", data)
+
+    def test_update_entry_missing_content(self):
+        create_response = self.client.post(
+            "/entries/",
+            json={
+                "title": "Test Entry",
+                "content": "Testing journal entry creation",
+                "tags": ["test", "journal"]
+            },
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(create_response.status_code, 201)
+        entry_id = create_response.get_json()["entry_id"]
+
+        response = self.client.put(
+            f"/entries/{entry_id}",
+            json={
+                "title": "Updated Entry",
+                "content": "",  # Invalid: empty content
+                "tags": ["updated", "journal"]
+            },
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        print("DEBUG [test_update_entry_missing_content] response JSON:", response.get_json())
+        print("DEBUG [test_update_entry_missing_content] status code:", response.status_code)
+        self.assertEqual(response.status_code, 422)
+        data = response.get_json()
+        self.assertIn("errors", data)
+
+    def test_delete_entry_unauthorized_non_existent(self):
+        with self.app.app_context():
+            hashed_password = generate_password_hash("password123")
+            other_user = User(username="otheruser2", email="other2@example.com", password=hashed_password)
+            db.session.add(other_user)
+            db.session.commit()
+            other_token = create_access_token(identity=str(other_user.id))
+        response = self.client.delete(
+            "/entries/999",
+            headers={"Authorization": f"Bearer {other_token}"}
+        )
+        print("DEBUG [test_delete_entry_unauthorized_non_existent] response JSON:", response.get_json())
+        print("DEBUG [test_delete_entry_unauthorized_non_existent] status code:", response.status_code)
+        self.assertEqual(response.status_code, 404)
+        data = response.get_json()
+        self.assertIn("error", data)
+
+    def test_delete_entry_unauthorized_valid_entry(self):
+        create_response = self.client.post(
+            "/entries/",
+            json={
+                "title": "Test Entry",
+                "content": "Testing journal entry creation",
+                "tags": ["test", "journal"]
+            },
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(create_response.status_code, 201)
+        entry_id = create_response.get_json()["entry_id"]
+
+        with self.app.app_context():
+            hashed_password = generate_password_hash("password123")
+            other_user = User(username="otheruser3", email="other3@example.com", password=hashed_password)
+            db.session.add(other_user)
+            db.session.commit()
+            other_token = create_access_token(identity=str(other_user.id))
+
+        response = self.client.delete(
+            f"/entries/{entry_id}",
+            headers={"Authorization": f"Bearer {other_token}"}
+        )
+        print("DEBUG [test_delete_entry_unauthorized_valid_entry] response JSON:", response.get_json())
+        print("DEBUG [test_delete_entry_unauthorized_valid_entry] status code:", response.status_code)
+        self.assertEqual(response.status_code, 404)
+        data = response.get_json()
+        self.assertIn("error", data)
+    
+    def test_delete_entry_unauthorized_existing_entry(self):
+        create_response = self.client.post(
+            "/entries/",
+            json={
+                "title": "Test Entry",
+                "content": "Testing journal entry creation",
+                "tags": ["test", "journal"]
+            },
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(create_response.status_code, 201)
+        entry_id = create_response.get_json()["entry_id"]
+
+        with self.app.app_context():
+            hashed_password = generate_password_hash("password123")
+            other_user = User(username="otheruser5", email="other5@example.com", password=hashed_password)
+            db.session.add(other_user)
+            db.session.commit()
+            other_token = create_access_token(identity=str(other_user.id))
+
+        response = self.client.delete(
+            f"/entries/{entry_id}",
+            headers={"Authorization": f"Bearer {other_token}"}
+        )
+        print("DEBUG [test_delete_entry_unauthorized_existing_entry] response JSON:", response.get_json())
+        print("DEBUG [test_delete_entry_unauthorized_existing_entry] status code:", response.status_code)
+        self.assertEqual(response.status_code, 404)
+        data = response.get_json()
+        self.assertIn("error", data)
+
 
 if __name__ == "__main__":
     unittest.main()

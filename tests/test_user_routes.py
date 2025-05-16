@@ -53,7 +53,7 @@ class TestUserRoutes(unittest.TestCase):
             "/users/register",
             json={
                 "username": "anotheruser",
-                "email": "test@example.com",  # Duplicate email
+                "email": "test@example.com",
                 "password": "password123"
             }
         )
@@ -67,13 +67,33 @@ class TestUserRoutes(unittest.TestCase):
         response = self.client.post(
             "/users/register",
             json={
-                "username": "testuser",  # Duplicate username
+                "username": "testuser",
                 "email": "new2@example.com",
                 "password": "password123"
             }
         )
         print("DEBUG [test_register_duplicate_username] response JSON:", response.get_json())
         print("DEBUG [test_register_duplicate_username] status code:", response.status_code)
+        self.assertEqual(response.status_code, 400)
+        data = response.get_json()
+        self.assertIn("username already taken", data["error"].lower())
+
+    def test_register_duplicate_username_case_insensitive(self):
+        with self.app.app_context():
+            user = User(username="conflictuser", email="conflict2@example.com", password=generate_password_hash("password123"))
+            db.session.add(user)
+            db.session.commit()
+            self.assertIsNotNone(User.query.filter_by(username="conflictuser").first())
+        response = self.client.post(
+            "/users/register",
+            json={
+                "username": "conflictuser",
+                "email": "new4@example.com",
+                "password": "password123"
+            }
+        )
+        print("DEBUG [test_register_duplicate_username_case_insensitive] response JSON:", response.get_json())
+        print("DEBUG [test_register_duplicate_username_case_insensitive] status code:", response.status_code)
         self.assertEqual(response.status_code, 400)
         data = response.get_json()
         self.assertIn("username already taken", data["error"].lower())
@@ -110,7 +130,7 @@ class TestUserRoutes(unittest.TestCase):
         self.assertIn("internal server error", data["error"].lower())
 
     def test_register_server_error(self):
-        with patch('journalapi.resources.user.generate_password_hash', side_effect=Exception("Hashing error")):
+        with patch('journalapi.models.User.__init__', side_effect=Exception("User creation error")):
             response = self.client.post(
                 "/users/register",
                 json={
@@ -179,7 +199,6 @@ class TestUserRoutes(unittest.TestCase):
 
     def test_get_user_not_found(self):
         with self.app.app_context():
-            # Use a non-existent user ID but valid JWT identity
             non_existent_id = self.user_id + 999
             token = create_access_token(identity=str(non_existent_id))
         response = self.client.get(
@@ -218,6 +237,29 @@ class TestUserRoutes(unittest.TestCase):
         data = response.get_json()
         self.assertIn("unauthorized", data["error"].lower())
 
+    def test_update_user_invalid_token(self):
+        response = self.client.put(
+            f"/users/{self.user_id}",
+            json={"username": "invalid", "email": "invalid@example.com"},
+            headers={"Authorization": "Bearer invalid_token"}
+        )
+        print("DEBUG [test_update_user_invalid_token] response JSON:", response.get_json())
+        print("DEBUG [test_update_user_invalid_token] status code:", response.status_code)
+        self.assertEqual(response.status_code, 422)
+        data = response.get_json()
+        self.assertIn("not enough segments", data["msg"].lower())
+
+    def test_update_user_missing_token(self):
+        response = self.client.put(
+            f"/users/{self.user_id}",
+            json={"username": "missing", "email": "missing@example.com"}
+        )
+        print("DEBUG [test_update_user_missing_token] response JSON:", response.get_json())
+        print("DEBUG [test_update_user_missing_token] status code:", response.status_code)
+        self.assertEqual(response.status_code, 401)
+        data = response.get_json()
+        self.assertIn("missing authorization header", data["msg"].lower())
+
     def test_delete_user(self):
         response = self.client.delete(
             f"/users/{self.user_id}",
@@ -242,9 +284,30 @@ class TestUserRoutes(unittest.TestCase):
         data = response.get_json()
         self.assertIn("unauthorized", data["error"].lower())
 
+    def test_delete_user_invalid_token(self):
+        response = self.client.delete(
+            f"/users/{self.user_id}",
+            headers={"Authorization": "Bearer invalid_token"}
+        )
+        print("DEBUG [test_delete_user_invalid_token] response JSON:", response.get_json())
+        print("DEBUG [test_delete_user_invalid_token] status code:", response.status_code)
+        self.assertEqual(response.status_code, 422)
+        data = response.get_json()
+        self.assertIn("not enough segments", data["msg"].lower())
+
+    def test_delete_user_missing_token(self):
+        response = self.client.delete(
+            f"/users/{self.user_id}"
+        )
+        print("DEBUG [test_delete_user_missing_token] response JSON:", response.get_json())
+        print("DEBUG [test_delete_user_missing_token] status code:", response.status_code)
+        self.assertEqual(response.status_code, 401)
+        data = response.get_json()
+        self.assertIn("missing authorization header", data["msg"].lower())
+
     def test_user_to_dict(self):
         with self.app.app_context():
-            user = User.query.get(self.user_id)
+            user = db.session.get(User, self.user_id)
             user_dict = user.to_dict()
             self.assertEqual(user_dict["username"], "testuser")
             self.assertEqual(user_dict["email"], "test@example.com")
