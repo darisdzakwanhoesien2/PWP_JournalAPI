@@ -6,7 +6,6 @@ import auth, config
 
 entry_app = typer.Typer(help="Manage journal entries")
 
-
 @entry_app.command("list")
 def list_entries():
     """
@@ -19,7 +18,7 @@ def list_entries():
 
     res = requests.get(f"{config.API_URL}/entries/", headers={"Authorization": f"Bearer {token}"})
     if res.status_code == 200:
-        entries = res.json()
+        entries = res.json().get('entries', [])  # Access 'entries' key, default to empty list
         if not entries:
             print("[yellow]⚠️ No journal entries found.[/yellow]")
         for entry in entries:
@@ -28,7 +27,6 @@ def list_entries():
             print("  [dim]-- -- --[/dim]")
     else:
         print(f"[red]❌ Failed to list entries: {res.json()}[/red]")
-
 
 @entry_app.command("create")
 def create(
@@ -56,7 +54,6 @@ def create(
         print("[green]✅ Entry created successfully![/green]")
     else:
         print(f"[red]❌ Failed to create entry: {res.json()}[/red]")
-
 
 @entry_app.command("delete")
 def delete(entry_id: int = typer.Argument(..., help="ID of the entry to delete")):

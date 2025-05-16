@@ -1,4 +1,4 @@
-# PWP_JournalAPI/tests/test_user_routes.py
+# tests/test_user_routes.py
 import sys
 import os
 import unittest
@@ -183,6 +183,11 @@ class TestUserRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertIn("username", data)
+        self.assertIn("_links", data)
+        links = data["_links"]
+        self.assertEqual(links["self"]["href"], f"/users/{self.user_id}")
+        self.assertEqual(links["edit"]["href"], f"/users/{self.user_id}")
+        self.assertEqual(links["delete"]["href"], f"/users/{self.user_id}")
 
     def test_get_user_unauthorized(self):
         with self.app.app_context():
@@ -221,7 +226,12 @@ class TestUserRoutes(unittest.TestCase):
         print("DEBUG [test_update_user] status code:", response.status_code)
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
-        self.assertIn("updated", data["message"].lower())
+        self.assertIn("message", data)
+        self.assertIn("_links", data)
+        links = data["_links"]
+        self.assertEqual(links["self"]["href"], f"/users/{self.user_id}")
+        self.assertEqual(links["edit"]["href"], f"/users/{self.user_id}")
+        self.assertEqual(links["delete"]["href"], f"/users/{self.user_id}")
 
     def test_update_user_unauthorized(self):
         with self.app.app_context():
@@ -269,7 +279,11 @@ class TestUserRoutes(unittest.TestCase):
         print("DEBUG [test_delete_user] status code:", response.status_code)
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
-        self.assertIn("deleted successfully", data["message"].lower())
+        self.assertIn("message", data)
+        self.assertIn("_links", data)
+        links = data["_links"]
+        self.assertEqual(links["self"]["href"], f"/users/{self.user_id}")
+        self.assertEqual(links["register"]["href"], "/users/register")
 
     def test_delete_user_unauthorized(self):
         with self.app.app_context():

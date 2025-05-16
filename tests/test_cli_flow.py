@@ -23,13 +23,14 @@ class TestJournalCLIFlow(unittest.TestCase):
         cls.flask_process = multiprocessing.Process(target=run_flask_app)
         cls.flask_process.start()
         # Wait for the server to start
-        time.sleep(5)
+        time.sleep(10)  # Increased from 5 to 10 seconds
+        print("DEBUG [setUpClass] Flask server started")
 
         # Reset the database for a clean test environment
         app = create_app()
         with app.app_context():
-            db.drop_all()  # Clear existing data
-            db.create_all()  # Recreate tables
+            db.drop_all()
+            db.create_all()
             print("DEBUG [setUpClass] Database reset and initialized")
 
     @classmethod
@@ -40,6 +41,7 @@ class TestJournalCLIFlow(unittest.TestCase):
         # Clean up token file
         if os.path.exists(TOKEN_FILE):
             os.remove(TOKEN_FILE)
+        print("DEBUG [tearDownClass] Flask server terminated and token file cleaned")
 
     def run_cli(self, command):
         """
@@ -55,6 +57,9 @@ class TestJournalCLIFlow(unittest.TestCase):
                 text=True,
                 encoding='utf-8'
             )
+            print(f"DEBUG [run_cli] Command: {command}")
+            print(f"DEBUG [run_cli] stdout: {result.stdout}")
+            print(f"DEBUG [run_cli] stderr: {result.stderr}")
             return result.stdout or "", result.stderr or ""
         except subprocess.CalledProcessError as e:
             print(f"DEBUG [run_cli] Command failed: {command}")
@@ -104,13 +109,13 @@ class TestJournalCLIFlow(unittest.TestCase):
         self.assertIsNotNone(match, f"Could not extract entry ID from line: {entry_line}")
         entry_id = match.group(1)
 
-        # 5. Add a comment to the entry (using positional arguments)
+        # 5. Add a comment to the entry
         out, err = self.run_cli(f'python client/main.py comment add {entry_id} "hello!"')
         print(f"DEBUG [test_cli_end_to_end] Comment add stdout: {out}")
         print(f"DEBUG [test_cli_end_to_end] Comment add stderr: {err}")
         self.assertIn("✅", out + err, f"Comment add failed: stdout: {out}, stderr: {err}")
 
-        # 6. List comments and verify the comment exists (using the positional parameter for entry_id)
+        # 6. List comments and verify the comment exists
         out, err = self.run_cli(f'python client/main.py comment list {entry_id}')
         print(f"DEBUG [test_cli_end_to_end] Comment list stdout: {out}")
         print(f"DEBUG [test_cli_end_to_end] Comment list stderr: {err}")

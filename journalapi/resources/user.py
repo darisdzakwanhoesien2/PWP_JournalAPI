@@ -55,17 +55,27 @@ class UserResource(Resource):
         current_user_id = get_jwt_identity()
         if str(user_id) != current_user_id:
             return JsonResponse({"error": "Unauthorized"}, 403)
-        user = db.session.get(User, user_id)  # Updated
+        user = db.session.get(User, user_id)
         if not user:
             return JsonResponse({"error": "User not found"}, 404)
-        return JsonResponse({"id": user.id, "username": user.username, "email": user.email}, 200)
+        user_data = {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "_links": {
+                "self": {"href": f"/users/{user_id}"},
+                "edit": {"href": f"/users/{user_id}"},
+                "delete": {"href": f"/users/{user_id}"}
+            }
+        }
+        return JsonResponse(user_data, 200)
 
     @jwt_required()
     def put(self, user_id):
         current_user_id = get_jwt_identity()
         if str(user_id) != current_user_id:
             return JsonResponse({"error": "Unauthorized"}, 403)
-        user = db.session.get(User, user_id)  # Updated
+        user = db.session.get(User, user_id)
         if not user:
             return JsonResponse({"error": "User not found"}, 404)
         data = request.get_json() or {}
@@ -76,16 +86,31 @@ class UserResource(Resource):
         if "password" in data:
             user.password = generate_password_hash(data["password"])
         db.session.commit()
-        return JsonResponse({"message": "User updated successfully"}, 200)
+        response_data = {
+            "message": "User updated successfully",
+            "_links": {
+                "self": {"href": f"/users/{user_id}"},
+                "edit": {"href": f"/users/{user_id}"},
+                "delete": {"href": f"/users/{user_id}"}
+            }
+        }
+        return JsonResponse(response_data, 200)
 
     @jwt_required()
     def delete(self, user_id):
         current_user_id = get_jwt_identity()
         if str(user_id) != current_user_id:
             return JsonResponse({"error": " unauthorized"}, 403)
-        user = db.session.get(User, user_id)  # Updated
+        user = db.session.get(User, user_id)
         if not user:
             return JsonResponse({"error": "User not found"}, 404)
         db.session.delete(user)
         db.session.commit()
-        return JsonResponse({"message": "User deleted successfully"}, 200)
+        response_data = {
+            "message": "User deleted successfully",
+            "_links": {
+                "self": {"href": f"/users/{user_id}"},
+                "register": {"href": "/users/register"}
+            }
+        }
+        return JsonResponse(response_data, 200)

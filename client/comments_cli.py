@@ -2,14 +2,17 @@
 import typer
 import requests
 from rich import print
-import auth, config # from client 
+import auth, config
 
 comment_app = typer.Typer(help="Manage comments")
 
 @comment_app.command("list")
 def list_comments(entry_id: int):
     res = requests.get(f"{config.API_URL}/entries/{entry_id}/comments", headers={"Authorization": f"Bearer {auth.get_token()}"})
-    for c in res.json():
+    comments = res.json().get('comments', [])  # Access 'comments' key, default to empty list
+    if not comments:
+        print("[yellow]⚠️ No comments found.[/yellow]")
+    for c in comments:
         print(f"[{c['id']}] {c['content']}")
 
 @comment_app.command("add")
