@@ -1,5 +1,5 @@
 # PWP_JournalAPI/journalapi/models.py
-
+# PWP_JournalAPI/journalapi/models.py
 from datetime import datetime
 import json
 from extensions import db
@@ -16,7 +16,14 @@ class User(db.Model):
     edit_histories = db.relationship("EditHistory", backref="editor", cascade="all, delete-orphan")
 
     def to_dict(self):
-        return {"id": self.id, "username": self.username, "email": self.email}
+        data = {"id": self.id, "username": self.username, "email": self.email}
+        # Add HAL links for user
+        data["_links"] = {
+            "self": {"href": f"/users/{self.id}"},
+            "edit": {"href": f"/users/{self.id}"},
+            "delete": {"href": f"/users/{self.id}"}
+        }
+        return data
 
 class JournalEntry(db.Model):
     __tablename__ = "journal_entries"
@@ -34,7 +41,7 @@ class JournalEntry(db.Model):
     edit_histories = db.relationship("EditHistory", backref="journal_entry", cascade="all, delete-orphan")
 
     def to_dict(self):
-        return {
+        data = {
             "id": self.id,
             "title": self.title,
             "content": self.content,
@@ -44,6 +51,15 @@ class JournalEntry(db.Model):
             "date": self.date.isoformat() if self.date else None,
             "last_updated": self.last_updated.isoformat() if self.last_updated else None
         }
+        # Add HAL links for journal entry
+        data["_links"] = {
+            "self": {"href": f"/entries/{self.id}"},
+            "edit": {"href": f"/entries/{self.id}"},
+            "delete": {"href": f"/entries/{self.id}"},
+            "comments": {"href": f"/entries/{self.id}/comments"},
+            "history": {"href": f"/entries/{self.id}/history"}
+        }
+        return data
 
 class Comment(db.Model):
     __tablename__ = "comments"
@@ -54,13 +70,19 @@ class Comment(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
-        return {
+        data = {
             "id": self.id,
             "journal_entry_id": self.journal_entry_id,
             "user_id": self.user_id,
             "content": self.content,
             "timestamp": self.timestamp.isoformat() if self.timestamp else None
         }
+        data["_links"] = {
+            "self": {"href": f"/entries/{self.journal_entry_id}/comments/{self.id}"},
+            "edit": {"href": f"/entries/{self.journal_entry_id}/comments/{self.id}"},
+            "delete": {"href": f"/entries/{self.journal_entry_id}/comments/{self.id}"}
+        }
+        return data
 
 class EditHistory(db.Model):
     __tablename__ = "edit_history"
@@ -72,7 +94,7 @@ class EditHistory(db.Model):
     new_content = db.Column(db.Text, nullable=False)
 
     def to_dict(self):
-        return {
+        data = {
             "id": self.id,
             "journal_entry_id": self.journal_entry_id,
             "user_id": self.user_id,
@@ -80,3 +102,7 @@ class EditHistory(db.Model):
             "previous_content": self.previous_content,
             "new_content": self.new_content
         }
+        data["_links"] = {
+            "self": {"href": f"/entries/{self.journal_entry_id}/history/{self.id}"}
+        }
+        return data

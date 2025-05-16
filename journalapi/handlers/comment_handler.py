@@ -1,8 +1,8 @@
+# PWP_JournalAPI/journalapi/handlers/comment_handler.py
 from journalapi import db
 from journalapi.models import Comment
 
 class CommentHandler:
-
     @staticmethod
     def add_comment(entry_id, user_id, content):
         comment = Comment(journal_entry_id=entry_id, user_id=user_id, content=content)
@@ -18,17 +18,17 @@ class CommentHandler:
 
     @staticmethod
     def update_comment(comment_id, user_id, content):
-        comment = Comment.query.get(comment_id)
+        comment = db.session.get(Comment, comment_id)
         if comment and comment.user_id == user_id:
             comment.content = content
             db.session.commit()
-            db.session.refresh(comment)  # Ensures updated data is returned
+            db.session.refresh(comment)
             return comment.to_dict()
         return None
 
     @staticmethod
     def delete_comment(comment_id, user_id):
-        comment = Comment.query.get(comment_id)
+        comment = db.session.get(Comment, comment_id)
         if comment and comment.user_id == user_id:
             db.session.delete(comment)
             db.session.commit()

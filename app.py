@@ -24,7 +24,8 @@ def create_app(test_config=None):
 
     db.init_app(app)
     JWTManager(app)
-    Swagger(app, template_file="docs/openapi.yaml")  # <- Load your YAML here
+    # Load your OpenAPI YAML file (make sure the file exists at docs/openapi.yaml or update the path)
+    Swagger(app, template_file="openapi.yaml")
 
     app.register_blueprint(api_bp)
     app.cli.add_command(init_db_command)

@@ -1,4 +1,4 @@
-# schemas.py
+# PWP_JournalAPI/schemas.py
 from marshmallow import Schema, fields, validate, EXCLUDE
 
 class UserRegisterSchema(Schema):
@@ -17,8 +17,14 @@ class UserLoginSchema(Schema):
 class JournalEntrySchema(Schema):
     class Meta:
         unknown = EXCLUDE
-    title = fields.Str(required=True)
-    content = fields.Str(required=True)
+    title = fields.Str(
+        required=True,
+        validate=validate.Length(min=1, error="Title cannot be empty")
+    )
+    content = fields.Str(
+        required=True,
+        validate=validate.Length(min=1, error="Content cannot be empty")
+    )
     tags = fields.List(fields.Str(), required=True)
 
 class CommentSchema(Schema):

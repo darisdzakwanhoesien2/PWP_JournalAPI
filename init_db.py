@@ -1,3 +1,4 @@
+# PWP_JournalAPI/init_db.py
 from app import create_app
 from extensions import db
 

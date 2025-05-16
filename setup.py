@@ -1,4 +1,4 @@
-# PWP_JournalAPI/schemas.py
+# PWP_JournalAPI/setup.py
 from setuptools import setup, find_packages
 
 setup(
@@ -14,7 +14,9 @@ setup(
         "flask-restful",
         "flask-sqlalchemy",
         "flask-jwt-extended",
-        "werkzeug"
+        "werkzeug",
+        "flasgger",
+        "marshmallow"
     ],
     python_requires='>=3.7',
 )

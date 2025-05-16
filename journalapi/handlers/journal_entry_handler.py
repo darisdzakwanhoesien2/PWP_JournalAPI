@@ -1,3 +1,4 @@
+# PWP_JournalAPI/journalapi/handlers/journal_entry_handler.py
 from journalapi import db
 from journalapi.models import JournalEntry
 from datetime import datetime, timezone
@@ -29,12 +30,12 @@ class JournalEntryHandler:
 
     @staticmethod
     def get_entry(entry_id):
-        entry = JournalEntry.query.get(entry_id)
+        entry = db.session.get(JournalEntry, entry_id)
         return entry.to_dict() if entry else None
 
     @staticmethod
     def update_entry(entry_id, title=None, content=None, tags=None):
-        entry = JournalEntry.query.get(entry_id)
+        entry = db.session.get(JournalEntry, entry_id)
         if not entry:
             return None
         if title:
@@ -48,7 +49,7 @@ class JournalEntryHandler:
 
     @staticmethod
     def delete_entry(entry_id):
-        entry = JournalEntry.query.get(entry_id)
+        entry = db.session.get(JournalEntry, entry_id)
         if entry:
             db.session.delete(entry)
             db.session.commit()

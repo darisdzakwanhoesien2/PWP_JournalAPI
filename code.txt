@@ -1,0 +1,1542 @@
+# app.py
+# PWP_JournalAPI/app.py
+import os
+from flask import Flask
+from flask_jwt_extended import JWTManager
+from flasgger import Swagger
+from extensions import db
+from journalapi.api import api_bp
+from journalapi.cli import init_db_command
+
+def create_app(test_config=None):
+    app = Flask(__name__, instance_relative_config=True)
+
+    app.config.from_mapping(
+        SECRET_KEY="dev",
+        SQLALCHEMY_DATABASE_URI="sqlite:///" + os.path.join(app.instance_path, "journal.db"),
+        SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        SWAGGER={"title": "PWP Journal API", "uiversion": 3}
+    )
+
+    if test_config:
+        app.config.update(test_config)
+
+    os.makedirs(app.instance_path, exist_ok=True)
+
+    db.init_app(app)
+    JWTManager(app)
+    Swagger(app, template_file="docs/openapi.yaml")  # <- Load your YAML here
+
+    app.register_blueprint(api_bp)
+    app.cli.add_command(init_db_command)
+
+    return app
+
+
+# data.py
+from pathlib import Path
+import json
+
+def extract_content_from_ipynb(file_path: Path) -> str:
+    """
+    Extracts and concatenates the content of a Jupyter Notebook (.ipynb) file.
+    Both code cells and markdown cells are extracted, preserving the order.
+    Each cell is annotated with a header indicating its type.
+    """
+    try:
+        notebook = json.loads(file_path.read_text(encoding="utf-8"))
+        cells = notebook.get("cells", [])
+        content_lines = []
+        for idx, cell in enumerate(cells, start=1):
+            cell_type = cell.get("cell_type", "unknown")
+            # Add a header for this cell
+            if cell_type == "code":
+                content_lines.append(f"### Cell {idx}: Code")
+            elif cell_type == "markdown":
+                content_lines.append(f"### Cell {idx}: Markdown")
+            else:
+                content_lines.append(f"### Cell {idx}: {cell_type}")
+            # Join the source lines; they are typically stored as a list of lines.
+            source = "".join(cell.get("source", []))
+            content_lines.append(source)
+            content_lines.append("\n")  # Extra newline after each cell
+        return "\n".join(content_lines)
+    except Exception as e:
+        return f"# Error reading {file_path}: {e}"
+
+def export_code_and_directory_list(root_directory=".", code_file="code.txt", list_file="directories.txt"):
+    """
+    Traverses the given root directory to find all files with a .py or .ipynb extension.
+    Writes to two files:
+      - directories.txt: A list of the file paths.
+      - code.txt: Each file’s path (as header) followed by its content.
+        For .ipynb files, both code and markdown cells are included.
+    """
+    root = Path(root_directory)
+    # Collect both .py and .ipynb files
+    files = list(root.rglob("*.py")) + list(root.rglob("*.ipynb"))
+    # Optional: sort files for a consistent order
+    files.sort(key=lambda p: p.as_posix())
+
+    with open(code_file, "w", encoding="utf-8") as code_out, open(list_file, "w", encoding="utf-8") as list_out:
+        for file_path in files:
+            # Write the file path to the directories file
+            list_out.write(f"{file_path}\n")
+            
+            # Write the file path header in the code file
+            code_out.write(f"# {file_path}\n")
+            
+            # Process the file according to its extension
+            if file_path.suffix == ".ipynb":
+                content = extract_content_from_ipynb(file_path)
+            else:
+                try:
+                    content = file_path.read_text(encoding="utf-8")
+                except Exception as e:
+                    content = f"# Error reading {file_path}: {e}"
+            
+            code_out.write(content)
+            code_out.write("\n\n")  # Add separation for readability
+
+if __name__ == "__main__":
+    # Adjust 'root_directory' if your repository root is different.
+    export_code_and_directory_list(root_directory=".", code_file="code.txt", list_file="directories.txt")
+
+
+# extensions.py
+from flask_sqlalchemy import SQLAlchemy
+
+db = SQLAlchemy()  # Create a single DB instance
+
+
+# init_db.py
+from app import create_app
+from extensions import db
+
+app = create_app()
+with app.app_context():
+    db.create_all()
+print("Database initialized.")
+
+
+# insert_from_files.py
+import csv
+from app import create_app
+from extensions import db
+from models import User, JournalEntry, EditHistory, Comment
+from datetime import datetime
+import json
+from datetime import datetime, timezone
+
+app = create_app()
+
+def list_to_json(lst):
+    """Converts list to JSON string."""
+    return json.dumps(lst)
+
+def insert_users(file_path):
+    """Reads users from file and inserts them into the database, avoiding duplicates."""
+    with open(file_path, "r") as file, app.app_context():
+        reader = csv.reader(file)
+        for row in reader:
+            username, email, password = [field.strip() for field in row]
+
+            # Check if user already exists
+            existing_user = db.session.query(User).filter_by(email=email).first()
+            if existing_user:
+                print(f"⚠️ Skipping duplicate user: {email}")
+                continue
+
+            user = User(username=username, email=email, password=password)
+            db.session.add(user)
+
+        db.session.commit()
+    print("✅ Users added successfully!")
+
+def insert_journal_entries(file_path):
+    """Reads journal entries from file and inserts them into the database."""
+    with open(file_path, "r") as file, app.app_context():
+        reader = csv.reader(file)
+        for row in reader:
+            user_id, title, content, tags, sentiment_score, sentiment_tag = row
+            entry = JournalEntry(
+                user_id=int(user_id),
+                title=title.strip(),
+                content=content.strip(),
+                tags=list_to_json([tag.strip() for tag in tags.split(",")]),
+                sentiment_score=float(sentiment_score),
+                sentiment_tag=list_to_json([tag.strip() for tag in sentiment_tag.split(",")]),
+                last_updated = datetime.now(timezone.utc)  # Correct way to get current UTC time: Depreciated# last_updated=datetime.utcnow()
+            )
+            db.session.add(entry)
+        db.session.commit()
+    print("✅ Journal Entries added successfully!")
+
+def insert_edit_history(file_path):
+    """Reads edit history from file and inserts them into the database."""
+    with open(file_path, "r") as file, app.app_context():
+        reader = csv.reader(file)
+        for row in reader:
+            journal_entry_id, user_id, previous_content, new_content = row
+            edit = EditHistory(
+                journal_entry_id=int(journal_entry_id),
+                user_id=int(user_id),
+                edited_at=datetime.now(timezone.utc), #datetime.utcnow(),
+                previous_content=previous_content.strip(),
+                new_content=new_content.strip()
+            )
+            db.session.add(edit)
+        db.session.commit()
+    print("✅ Edit History added successfully!")
+
+def insert_comments(file_path):
+    """Reads comments from file and inserts them into the database."""
+    with open(file_path, "r") as file, app.app_context():
+        reader = csv.reader(file)
+        for row in reader:
+            if len(row) < 3:
+                print(f"⚠️ Skipping invalid row (not enough fields): {row}")
+                continue
+
+            journal_entry_id = int(row[0])
+            user_id = int(row[1])
+            content = ",".join(row[2:]).strip()  # Fix: Join all remaining parts as comment text
+
+            comment = Comment(
+                journal_entry_id=journal_entry_id,
+                user_id=user_id,
+                content=content,
+                timestamp=datetime.utcnow()
+            )
+            db.session.add(comment)
+
+        db.session.commit()
+    print("✅ Comments added successfully!")
+
+if __name__ == "__main__":
+    insert_users("data/users.txt")
+    insert_journal_entries("data/journal_entries.txt")
+    insert_edit_history("data/edit_history.txt")
+    insert_comments("data/comments.txt")
+    print("🎉 All data has been inserted successfully!")
+
+
+# journalapi/__init__.py
+# from flask import Flask
+# from flask_sqlalchemy import SQLAlchemy
+# from flask_jwt_extended import JWTManager
+# import os
+
+# db = SQLAlchemy()
+
+# def create_app(test_config=None):
+#     app = Flask(__name__, instance_relative_config=True)
+    
+#     # Default config (used for development)
+#     app.config.from_mapping(
+#         SECRET_KEY="dev",
+#         SQLALCHEMY_DATABASE_URI="sqlite:///" + os.path.join(app.instance_path, "journal.db"),
+#         SQLALCHEMY_TRACK_MODIFICATIONS=False
+#     )
+
+#     # If test config is provided, override default
+#     if test_config:
+#         app.config.update(test_config)
+#     else:
+#         app.config.from_pyfile("config.py", silent=True)
+
+#     try:
+#         os.makedirs(app.instance_path, exist_ok=True)
+#     except OSError:
+#         pass
+
+#     db.init_app(app)
+#     JWTManager(app)
+
+#     from . import api
+#     app.register_blueprint(api.api_bp)
+
+#     from .cli import init_db_command
+#     app.cli.add_command(init_db_command)
+
+#     return app
+
+
+# journalapi/api.py
+# PWP_JournalAPI/journalapi/api.py
+from flask import Blueprint
+from flask_restful import Api
+
+# your resources
+from journalapi.resources.user import (
+    UserRegisterResource, UserLoginResource, UserResource
+)
+from journalapi.resources.journal_entry import (
+    JournalEntryListResource, JournalEntryResource
+)
+from journalapi.resources.comment import (
+    CommentCollectionResource, CommentItemResource
+)
+from journalapi.resources.edit_history import EditHistoryResource
+
+api_bp = Blueprint("api", __name__, url_prefix="")  # or "/api" if you want
+api = Api(api_bp)
+
+# User endpoints
+api.add_resource(UserRegisterResource, "/users/register")
+api.add_resource(UserLoginResource, "/users/login")
+api.add_resource(UserResource, "/users/<int:user_id>")
+
+# Journal endpoints
+api.add_resource(JournalEntryListResource, "/entries/")
+api.add_resource(JournalEntryResource, "/entries/<int:entry_id>")
+
+# Comment endpoints
+api.add_resource(CommentCollectionResource, "/entries/<int:entry_id>/comments")
+api.add_resource(CommentItemResource, "/entries/<int:entry_id>/comments/<int:comment_id>")
+
+# If you add edit history:
+# journalapi/api.py
+from flask import Blueprint
+from flask_restful import Api
+
+# your resources
+from journalapi.resources.user import (
+    UserRegisterResource, UserLoginResource, UserResource
+)
+from journalapi.resources.journal_entry import (
+    JournalEntryListResource, JournalEntryResource
+)
+from journalapi.resources.comment import (
+    CommentCollectionResource, CommentItemResource
+)
+# from journalapi.resources.edit_history import EditHistoryResource
+
+api_bp = Blueprint("api", __name__, url_prefix="")  # or "/api" if you want
+api = Api(api_bp)
+
+# User endpoints
+api.add_resource(UserRegisterResource, "/users/register")
+api.add_resource(UserLoginResource, "/users/login")
+api.add_resource(UserResource, "/users/<int:user_id>")
+
+# Journal endpoints
+api.add_resource(JournalEntryListResource, "/entries/")
+api.add_resource(JournalEntryResource, "/entries/<int:entry_id>")
+
+# Comment endpoints
+api.add_resource(CommentCollectionResource, "/entries/<int:entry_id>/comments")
+api.add_resource(CommentItemResource, "/entries/<int:entry_id>/comments/<int:comment_id>")
+
+# If you add edit history:
+api.add_resource(EditHistoryResource, "/entries/<int:entry_id>/history")
+
+
+# journalapi/cli.py
+# PWP_JournalAPI/journalapi/cli.py
+import click
+from flask.cli import with_appcontext
+from extensions import db
+
+@click.command("init-db")
+@with_appcontext
+def init_db_command():
+    db.create_all()
+    click.echo("Initialized the database.")
+
+
+# journalapi/handlers/comment_handler.py
+from journalapi import db
+from journalapi.models import Comment
+
+class CommentHandler:
+
+    @staticmethod
+    def add_comment(entry_id, user_id, content):
+        comment = Comment(journal_entry_id=entry_id, user_id=user_id, content=content)
+        db.session.add(comment)
+        db.session.commit()
+        db.session.refresh(comment)  # Ensures comment remains attached
+        return comment.to_dict()
+
+    @staticmethod
+    def get_comments(entry_id):
+        comments = Comment.query.filter_by(journal_entry_id=entry_id).all()
+        return [comment.to_dict() for comment in comments]
+
+    @staticmethod
+    def update_comment(comment_id, user_id, content):
+        comment = Comment.query.get(comment_id)
+        if comment and comment.user_id == user_id:
+            comment.content = content
+            db.session.commit()
+            db.session.refresh(comment)  # Ensures updated data is returned
+            return comment.to_dict()
+        return None
+
+    @staticmethod
+    def delete_comment(comment_id, user_id):
+        comment = Comment.query.get(comment_id)
+        if comment and comment.user_id == user_id:
+            db.session.delete(comment)
+            db.session.commit()
+            return True
+        return False
+
+# journalapi/handlers/journal_entry_handler.py
+from journalapi import db
+from journalapi.models import JournalEntry
+from datetime import datetime, timezone
+import json
+
+class JournalEntryHandler:
+    @staticmethod
+    def create_entry(user_id, title, content, tags=None):
+        tags = tags or []
+        sentiment_score = 0.75
+        sentiment_tag = ["positive"]
+        new_entry = JournalEntry(
+            user_id=user_id,
+            title=title,
+            content=content,
+            tags=json.dumps(tags),
+            sentiment_score=sentiment_score,
+            sentiment_tag=json.dumps(sentiment_tag),
+            last_updated=datetime.now(timezone.utc)
+        )
+        db.session.add(new_entry)
+        db.session.commit()
+        return {"entry_id": new_entry.id}
+
+    @staticmethod
+    def get_entries(user_id):
+        entries = JournalEntry.query.filter_by(user_id=user_id).all()
+        return [entry.to_dict() for entry in entries]
+
+    @staticmethod
+    def get_entry(entry_id):
+        entry = JournalEntry.query.get(entry_id)
+        return entry.to_dict() if entry else None
+
+    @staticmethod
+    def update_entry(entry_id, title=None, content=None, tags=None):
+        entry = JournalEntry.query.get(entry_id)
+        if not entry:
+            return None
+        if title:
+            entry.title = title
+        if content:
+            entry.content = content
+        if tags is not None:
+            entry.tags = json.dumps(tags)
+        db.session.commit()
+        return entry.to_dict()
+
+    @staticmethod
+    def delete_entry(entry_id):
+        entry = JournalEntry.query.get(entry_id)
+        if entry:
+            db.session.delete(entry)
+            db.session.commit()
+            return True
+        return False
+
+
+# journalapi/handlers/user_handler.py
+from journalapi import db
+from journalapi.models import User
+from werkzeug.security import generate_password_hash, check_password_hash
+
+class UserHandler:
+
+    @staticmethod
+    def register_user(username, email, password):
+        existing_user = User.query.filter_by(email=email).first()
+        if existing_user:
+            return None  # User already exists
+
+        hashed_password = generate_password_hash(password)
+        new_user = User(username=username, email=email, password=hashed_password)
+        db.session.add(new_user)
+        db.session.commit()
+        return new_user
+
+    @staticmethod
+    def login_user(email, password):
+        user = User.query.filter_by(email=email).first()
+        if user and check_password_hash(user.password, password):
+            return user
+        return None
+
+    @staticmethod
+    def get_user(user_id):
+        return User.query.get(user_id)
+
+    @staticmethod
+    def update_user(user_id, username=None, email=None, password=None):
+        user = User.query.get(user_id)
+        if not user:
+            return None
+
+        if username:
+            user.username = username
+        if email:
+            user.email = email
+        if password:
+            user.password = generate_password_hash(password)
+
+        db.session.commit()
+        return user
+
+    @staticmethod
+    def delete_user(user_id):
+        user = User.query.get(user_id)
+        if user:
+            db.session.delete(user)
+            db.session.commit()
+            return True
+        return False
+
+# journalapi/models.py
+# PWP_JournalAPI/journalapi/models.py
+
+from datetime import datetime
+import json
+from extensions import db
+
+class User(db.Model):
+    __tablename__ = "users"
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), nullable=False)
+    email = db.Column(db.String(100), unique=True, nullable=False)
+    password = db.Column(db.String(255), nullable=False)
+
+    journal_entries = db.relationship("JournalEntry", backref="author", cascade="all, delete-orphan")
+    comments = db.relationship("Comment", backref="author", cascade="all, delete-orphan")
+    edit_histories = db.relationship("EditHistory", backref="editor", cascade="all, delete-orphan")
+
+    def to_dict(self):
+        return {"id": self.id, "username": self.username, "email": self.email}
+
+class JournalEntry(db.Model):
+    __tablename__ = "journal_entries"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    tags = db.Column(db.String, default="[]")
+    sentiment_score = db.Column(db.Float)
+    sentiment_tag = db.Column(db.String, default="[]")
+    date = db.Column(db.DateTime, default=datetime.utcnow)
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    comments = db.relationship("Comment", backref="journal_entry", cascade="all, delete-orphan")
+    edit_histories = db.relationship("EditHistory", backref="journal_entry", cascade="all, delete-orphan")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "content": self.content,
+            "tags": json.loads(self.tags),
+            "sentiment_score": self.sentiment_score,
+            "sentiment_tag": json.loads(self.sentiment_tag) if self.sentiment_tag else [],
+            "date": self.date.isoformat() if self.date else None,
+            "last_updated": self.last_updated.isoformat() if self.last_updated else None
+        }
+
+class Comment(db.Model):
+    __tablename__ = "comments"
+    id = db.Column(db.Integer, primary_key=True)
+    journal_entry_id = db.Column(db.Integer, db.ForeignKey("journal_entries.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "journal_entry_id": self.journal_entry_id,
+            "user_id": self.user_id,
+            "content": self.content,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None
+        }
+
+class EditHistory(db.Model):
+    __tablename__ = "edit_history"
+    id = db.Column(db.Integer, primary_key=True)
+    journal_entry_id = db.Column(db.Integer, db.ForeignKey("journal_entries.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    edited_at = db.Column(db.DateTime, default=datetime.utcnow)
+    previous_content = db.Column(db.Text, nullable=False)
+    new_content = db.Column(db.Text, nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "journal_entry_id": self.journal_entry_id,
+            "user_id": self.user_id,
+            "edited_at": self.edited_at.isoformat() if self.edited_at else None,
+            "previous_content": self.previous_content,
+            "new_content": self.new_content
+        }
+
+
+# journalapi/resources/comment.py
+# PWP_JournalAPI/journalapi/resources/comment.py
+from flask_restful import Resource
+from flask import request
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from marshmallow import ValidationError
+
+from extensions import db
+from journalapi.models import Comment
+from journalapi.utils import JsonResponse
+from schemas import CommentSchema
+
+comment_schema = CommentSchema()
+
+class CommentCollectionResource(Resource):
+    @jwt_required()
+    def get(self, entry_id):
+        comments = Comment.query.filter_by(journal_entry_id=entry_id).all()
+        data = []
+        for c in comments:
+            item = {
+                "id": c.id,
+                "journal_entry_id": c.journal_entry_id,
+                "user_id": c.user_id,
+                "content": c.content,
+                "timestamp": c.timestamp.isoformat() if c.timestamp else None,
+                "_links": {
+                    "self": {"href": f"/entries/{entry_id}/comments/{c.id}"},
+                    "edit": {"href": f"/entries/{entry_id}/comments/{c.id}"},
+                    "delete": {"href": f"/entries/{entry_id}/comments/{c.id}"}
+                }
+            }
+            data.append(item)
+        return JsonResponse(data, 200)
+
+    @jwt_required()
+    def post(self, entry_id):
+        try:
+            data = comment_schema.load(request.get_json())
+        except ValidationError as err:
+            return JsonResponse({"errors": err.messages}, 422)
+
+        user_id = int(get_jwt_identity())
+
+        comment = Comment(
+            journal_entry_id=entry_id,
+            user_id=user_id,
+            content=data["content"]
+        )
+        db.session.add(comment)
+        db.session.commit()
+
+        return JsonResponse({"comment_id": comment.id}, 201)
+
+class CommentItemResource(Resource):
+    @jwt_required()
+    def put(self, entry_id, comment_id):
+        try:
+            data = comment_schema.load(request.get_json())
+        except ValidationError as err:
+            return JsonResponse({"errors": err.messages}, 422)
+
+        user_id = int(get_jwt_identity())
+        comment = db.session.get(Comment, comment_id)
+        if not comment or comment.user_id != user_id or comment.journal_entry_id != entry_id:
+            return JsonResponse({"error": "Not found"}, 404)
+
+        comment.content = data["content"]
+        db.session.commit()
+        return JsonResponse({"message": "Comment fully replaced"}, 200)
+
+    @jwt_required()
+    def delete(self, entry_id, comment_id):
+        user_id = int(get_jwt_identity())
+        comment = db.session.get(Comment, comment_id)
+        if not comment or comment.user_id != user_id or comment.journal_entry_id != entry_id:
+            return JsonResponse({"error": "Not found"}, 404)
+
+        db.session.delete(comment)
+        db.session.commit()
+        return JsonResponse({"message": "Comment deleted successfully"}, 200)
+
+
+# journalapi/resources/edit_history.py
+# PWP_JournalAPI/journalapi/resources/edit_history.py
+from flask_restful import Resource
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from journalapi.models import EditHistory
+from journalapi.utils import JsonResponse
+
+class EditHistoryResource(Resource):
+    @jwt_required()
+    def get(self, entry_id):
+        user_id = get_jwt_identity()
+        # (Optionally, you can check that the user owns the entry.)
+        edits = EditHistory.query.filter_by(journal_entry_id=entry_id).all()
+        data = [edit.to_dict() for edit in edits]
+        return JsonResponse(data, 200)
+
+
+# journalapi/resources/journal_entry.py
+# PWP_JournalAPI/journalapi/resources/journal_entry.py
+from flask_restful import Resource
+from flask import request
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from marshmallow import ValidationError
+import json
+
+from extensions import db
+from journalapi.models import JournalEntry
+from journalapi.utils import JsonResponse
+from schemas import JournalEntrySchema
+
+entry_schema = JournalEntrySchema()
+
+class JournalEntryListResource(Resource):
+    @jwt_required()
+    def get(self):
+        user_id = int(get_jwt_identity())
+        entries = JournalEntry.query.filter_by(user_id=user_id).all()
+        data = []
+        for e in entries:
+            item = {
+                "id": e.id,
+                "title": e.title,
+                "tags": json.loads(e.tags),
+                "last_updated": e.last_updated.isoformat() if e.last_updated else None
+            }
+            item["_links"] = {
+                "self": {"href": f"/entries/{e.id}"},
+                "edit": {"href": f"/entries/{e.id}"},
+                "delete": {"href": f"/entries/{e.id}"},
+                "comments": {"href": f"/entries/{e.id}/comments"},
+                "history": {"href": f"/entries/{e.id}/history"}
+            }
+            data.append(item)
+        return JsonResponse(data, 200)
+
+    @jwt_required()
+    def post(self):
+        user_id = int(get_jwt_identity())
+        try:
+            data = entry_schema.load(request.get_json())
+        except ValidationError as err:
+            return JsonResponse({"errors": err.messages}, 422)
+
+        new_entry = JournalEntry(
+            user_id=user_id,
+            title=data["title"],
+            content=data["content"],
+            tags=json.dumps(data.get("tags", [])),
+            sentiment_score=0.75,
+            sentiment_tag=json.dumps(["positive"])
+        )
+        db.session.add(new_entry)
+        db.session.commit()
+        return JsonResponse({"entry_id": new_entry.id}, 201)
+
+class JournalEntryResource(Resource):
+    @jwt_required()
+    def get(self, entry_id):
+        user_id = int(get_jwt_identity())
+        entry = db.session.get(JournalEntry, entry_id)
+        if not entry or entry.user_id != user_id:
+            return JsonResponse({"error": "Not found"}, 404)
+        entry_data = entry.to_dict()
+        entry_data["_links"] = {
+            "self": {"href": f"/entries/{entry_id}"},
+            "edit": {"href": f"/entries/{entry_id}"},
+            "delete": {"href": f"/entries/{entry_id}"},
+            "comments": {"href": f"/entries/{entry_id}/comments"},
+            "history": {"href": f"/entries/{entry_id}/history"}
+        }
+        return JsonResponse(entry_data, 200)
+
+    @jwt_required()
+    def put(self, entry_id):
+        user_id = int(get_jwt_identity())
+        try:
+            data = entry_schema.load(request.get_json())
+        except ValidationError as err:
+            return JsonResponse({"errors": err.messages}, 422)
+
+        entry = db.session.get(JournalEntry, entry_id)
+        if not entry or entry.user_id != user_id:
+            return JsonResponse({"error": "Not found"}, 404)
+
+        entry.title = data["title"]
+        entry.content = data["content"]
+        entry.tags = json.dumps(data["tags"])
+        db.session.commit()
+        return JsonResponse({"message": "Entry fully replaced"}, 200)
+
+    @jwt_required()
+    def delete(self, entry_id):
+        user_id = int(get_jwt_identity())
+        entry = db.session.get(JournalEntry, entry_id)
+        if not entry or entry.user_id != user_id:
+            return JsonResponse({"error": "Not found"}, 404)
+        db.session.delete(entry)
+        db.session.commit()
+        return JsonResponse({"message": "Entry deleted successfully"}, 200)
+
+
+# journalapi/resources/user.py
+# PWP_JournalAPI/resources/user.py
+
+from flask_restful import Resource
+from flask import request
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from werkzeug.security import generate_password_hash, check_password_hash
+from marshmallow import ValidationError
+
+from extensions import db
+from journalapi.models import User
+from journalapi.utils import JsonResponse
+from schemas import UserRegisterSchema, UserLoginSchema
+
+register_schema = UserRegisterSchema()
+login_schema = UserLoginSchema()
+
+class UserRegisterResource(Resource):
+    def post(self):
+        """
+        Registers a new user with a unique email. 
+        Marshmallow validates required fields (username, email, password).
+        Returns 201 on success, or 422 if validation fails.
+        """
+        try:
+            data = register_schema.load(request.get_json())
+        except ValidationError as err:
+            return JsonResponse({"errors": err.messages}, 422)
+
+        if User.query.filter_by(email=data["email"]).first():
+            return JsonResponse({"error": "User already exists"}, 400)
+
+        hashed_password = generate_password_hash(data["password"])
+        user = User(
+            username=data["username"], 
+            email=data["email"], 
+            password=hashed_password
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        return JsonResponse({"message": "User registered successfully"}, 201)
+
+
+class UserLoginResource(Resource):
+    def post(self):
+        """
+        Logs in an existing user by email + password. 
+        Returns a JWT token on success, or 401 if invalid creds.
+        """
+        try:
+            data = login_schema.load(request.get_json())
+        except ValidationError as err:
+            return JsonResponse({"errors": err.messages}, 422)
+
+        user = User.query.filter_by(email=data["email"]).first()
+        if not user or not check_password_hash(user.password, data["password"]):
+            return JsonResponse({"error": "Invalid credentials"}, 401)
+
+        # IMPORTANT: Convert user.id to string for newer Flask-JWT-Extended versions
+        token = create_access_token(identity=str(user.id))
+        return JsonResponse({"token": token}, 200)
+
+
+class UserResource(Resource):
+    @jwt_required()
+    def get(self, user_id):
+        """
+        Retrieves user details if the token belongs to the same user.
+        """
+        current_user_id = get_jwt_identity()
+        # current_user_id is a string; convert or compare as str
+        if str(user_id) != current_user_id:
+            return JsonResponse({"error": "Unauthorized"}, 403)
+
+        user = User.query.get(user_id)
+        if not user:
+            return JsonResponse({"error": "User not found"}, 404)
+
+        return JsonResponse({
+            "id": user.id,
+            "username": user.username,
+            "email": user.email
+        }, 200)
+
+    @jwt_required()
+    def put(self, user_id):
+        """
+        Updates a user record if the token belongs to the same user.
+        Only updates fields present in the request body.
+        """
+        current_user_id = get_jwt_identity()
+        if str(user_id) != current_user_id:
+            return JsonResponse({"error": "Unauthorized"}, 403)
+
+        user = User.query.get(user_id)
+        if not user:
+            return JsonResponse({"error": "User not found"}, 404)
+
+        data = request.get_json() or {}
+        if "username" in data:
+            user.username = data["username"]
+        if "email" in data:
+            user.email = data["email"]
+        if "password" in data:
+            user.password = generate_password_hash(data["password"])
+
+        db.session.commit()
+        return JsonResponse({"message": "User updated successfully"}, 200)
+
+    @jwt_required()
+    def delete(self, user_id):
+        """
+        Deletes a user record if the token belongs to the same user.
+        """
+        current_user_id = get_jwt_identity()
+        if str(user_id) != current_user_id:
+            return JsonResponse({"error": "Unauthorized"}, 403)
+
+        user = User.query.get(user_id)
+        if not user:
+            return JsonResponse({"error": "User not found"}, 404)
+
+        db.session.delete(user)
+        db.session.commit()
+        return JsonResponse({"message": "User deleted successfully"}, 200)
+
+
+# journalapi/utils.py
+# PWP_JournalAPI/journalapi/utils.py
+import json
+from flask import Response
+
+def JsonResponse(body, status=200, mimetype="application/json"):
+    if isinstance(body, dict) and "_links" not in body:
+        if "id" in body:
+            # Inject common links based on resource type
+            resource_type = detect_resource_type(body)
+            body["_links"] = generate_links(resource_type, body["id"])
+    return Response(json.dumps(body), status=status, mimetype=mimetype)
+
+
+def detect_resource_type(data):
+    # Basic logic to determine resource type
+    if "title" in data:
+        return "entry"
+    elif "email" in data:
+        return "user"
+    elif "content" in data and "journal_entry_id" in data:
+        return "comment"
+    return None
+
+
+def generate_links(resource_type, id_):
+    if resource_type == "entry":
+        return {
+            "self": {"href": f"/entries/{id_}"},
+            "edit": {"href": f"/entries/{id_}"},
+            "delete": {"href": f"/entries/{id_}"},
+            "comments": {"href": f"/entries/{id_}/comments"},
+            "history": {"href": f"/entries/{id_}/history"}
+        }
+    elif resource_type == "user":
+        return {
+            "self": {"href": f"/users/{id_}"},
+            "edit": {"href": f"/users/{id_}"},
+            "delete": {"href": f"/users/{id_}"}
+        }
+    elif resource_type == "comment":
+        return {
+            "self": {"href": f"/entries/{id_}/comments/{id_}"},
+            "edit": {"href": f"/entries/{id_}/comments/{id_}"},
+            "delete": {"href": f"/entries/{id_}/comments/{id_}"}
+        }
+    return {}
+
+
+# schemas.py
+# schemas.py
+from marshmallow import Schema, fields, validate, EXCLUDE
+
+class UserRegisterSchema(Schema):
+    class Meta:
+        unknown = EXCLUDE
+    username = fields.Str(required=True, validate=validate.Length(min=1))
+    email = fields.Email(required=True)
+    password = fields.Str(required=True, validate=validate.Length(min=6))
+
+class UserLoginSchema(Schema):
+    class Meta:
+        unknown = EXCLUDE
+    email = fields.Email(required=True)
+    password = fields.Str(required=True)
+
+class JournalEntrySchema(Schema):
+    class Meta:
+        unknown = EXCLUDE
+    title = fields.Str(
+        required=True,
+        validate=validate.Length(min=1, error="Title cannot be empty")
+    )
+    content = fields.Str(
+        required=True,
+        validate=validate.Length(min=1, error="Content cannot be empty")
+    )
+    tags = fields.List(fields.Str(), required=True)
+
+class CommentSchema(Schema):
+    class Meta:
+        unknown = EXCLUDE
+    content = fields.Str(required=True, validate=validate.Length(min=1))
+
+
+# setup.py
+# PWP_JournalAPI/schemas.py
+from setuptools import setup, find_packages
+
+setup(
+    name="journalapi",
+    version="0.1.0",
+    description="A Flask RESTful journaling API.",
+    author="Your Name",
+    packages=find_packages(),
+    include_package_data=True,
+    zip_safe=False,
+    install_requires=[
+        "flask",
+        "flask-restful",
+        "flask-sqlalchemy",
+        "flask-jwt-extended",
+        "werkzeug"
+    ],
+    python_requires='>=3.7',
+)
+
+# tests/__init__.py
+import os
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+from flask_jwt_extended import JWTManager
+
+db = SQLAlchemy()
+
+def create_app(test_config=None):
+    app = Flask(__name__, instance_relative_config=True)
+    app.config.from_mapping(
+        SECRET_KEY="dev",
+        SQLALCHEMY_DATABASE_URI="sqlite://" + os.path.join(app.instance_path, "journal.db"),
+        SQLALCHEMY_TRACK_MODIFICATIONS=False
+    )
+
+    if test_config:
+        app.config.update(test_config)
+    else:
+        app.config.from_pyfile("config.py", silent=True)
+
+    try:
+        os.makedirs(app.instance_path, exist_ok=True)
+    except OSError:
+        pass
+
+    db.init_app(app)
+    JWTManager(app)
+
+    from . import api
+    app.register_blueprint(api.api_bp)
+
+    from .cli import init_db_command
+    app.cli.add_command(init_db_command)
+
+    return app
+
+# tests/conftest.py
+# PWP_JournalAPI/tests/conftest.py
+import pytest
+import os
+import sys
+
+# Add project root to path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from app import create_app
+from extensions import db
+
+@pytest.fixture
+def test_client():
+    # Create a test app with in-memory DB
+    app = create_app({
+        "TESTING": True,
+        "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+    })
+    with app.app_context():
+        db.create_all()
+        yield app.test_client()
+        db.drop_all()
+
+
+# tests/test_comments.py
+# PWP_JournalAPI/tests/test_comments.py
+
+import sys
+import os
+import unittest
+from werkzeug.security import generate_password_hash
+from flask_jwt_extended import create_access_token
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from app import create_app
+from extensions import db
+from journalapi.models import User, Comment, JournalEntry
+
+class TestCommentRoutes(unittest.TestCase):
+    def setUp(self):
+        """
+        Creates a fresh in-memory DB, adds a test user & entry,
+        and logs that user in with create_access_token(...).
+        """
+        self.app = create_app({
+            "TESTING": True,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"
+        })
+        self.client = self.app.test_client()
+
+        with self.app.app_context():
+            db.create_all()
+
+            hashed_password = generate_password_hash("password123")
+            user = User(username="testuser", email="test@example.com", password=hashed_password)
+            db.session.add(user)
+            db.session.commit()
+
+            self.user_id = user.id
+            # IMPORTANT: use str(...) for the identity
+            self.token = create_access_token(identity=str(user.id))
+
+            # Create a test journal entry
+            entry = JournalEntry(
+                user_id=self.user_id,
+                title="Test Entry",
+                content="Some test content"
+            )
+            db.session.add(entry)
+            db.session.commit()
+            self.entry_id = entry.id
+
+    def tearDown(self):
+        with self.app.app_context():
+            db.drop_all()
+
+    def test_add_comment(self):
+        response = self.client.post(
+            f"/entries/{self.entry_id}/comments",
+            json={"content": "This is a test comment."},
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        print("DEBUG [test_add_comment] response JSON:", response.get_json())
+        print("DEBUG [test_add_comment] status code:", response.status_code)
+
+        self.assertEqual(response.status_code, 201)
+        data = response.get_json()
+        self.assertIn("comment_id", data)
+
+    def test_get_comments(self):
+        # create a comment
+        create_resp = self.client.post(
+            f"/entries/{self.entry_id}/comments",
+            json={"content": "This is a test comment."},
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(create_resp.status_code, 201)
+
+        response = self.client.get(
+            f"/entries/{self.entry_id}/comments",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        print("DEBUG [test_get_comments] response JSON:", response.get_json())
+        print("DEBUG [test_get_comments] status code:", response.status_code)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertGreater(len(data), 0)
+        self.assertIn("content", data[0])
+
+    def test_update_comment(self):
+        create_resp = self.client.post(
+            f"/entries/{self.entry_id}/comments",
+            json={"content": "Original Comment"},
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(create_resp.status_code, 201)
+        comment_id = create_resp.get_json()["comment_id"]
+
+        update_resp = self.client.put(
+            f"/entries/{self.entry_id}/comments/{comment_id}",
+            json={"content": "Updated Comment"},
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        print("DEBUG [test_update_comment] response JSON:", update_resp.get_json())
+        print("DEBUG [test_update_comment] status code:", update_resp.status_code)
+
+        self.assertEqual(update_resp.status_code, 200)
+        self.assertIn("fully replaced", update_resp.get_json()["message"].lower())
+
+    def test_delete_comment(self):
+        create_resp = self.client.post(
+            f"/entries/{self.entry_id}/comments",
+            json={"content": "Comment to be deleted"},
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(create_resp.status_code, 201)
+        comment_id = create_resp.get_json()["comment_id"]
+
+        delete_resp = self.client.delete(
+            f"/entries/{self.entry_id}/comments/{comment_id}",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        print("DEBUG [test_delete_comment] response JSON:", delete_resp.get_json())
+        print("DEBUG [test_delete_comment] status code:", delete_resp.status_code)
+
+        self.assertEqual(delete_resp.status_code, 200)
+        self.assertIn("deleted", delete_resp.get_json()["message"].lower())
+
+        # verify gone
+        get_resp = self.client.get(
+            f"/entries/{self.entry_id}/comments",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(get_resp.status_code, 200)
+        data = get_resp.get_json()
+        self.assertFalse(any(c["id"] == comment_id for c in data))
+    def test_comment_foreign_entry(self):
+        # Try to comment on non-existent entry
+        response = self.client.post("/entries/999/comments",
+            json={"content": "Invalid comment"},
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_others_comment(self):
+        # Create second user
+        with self.app.app_context():
+            user2 = User(username="user2", email="user2@example.com", 
+                        password=generate_password_hash("pass"))
+            db.session.add(user2)
+            db.session.commit()
+            token2 = create_access_token(identity=str(user2.id))
+
+        # User2 tries to edit user1's comment
+        comment = self._create_comment()
+        response = self.client.put(
+            f"/entries/{self.entry_id}/comments/{comment['comment_id']}",
+            json={"content": "Hacked!"},
+            headers={"Authorization": f"Bearer {token2}"}
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_comment_hypermedia_links(self):
+        comment = self._create_comment()
+        response = self.client.get(
+            f"/entries/{self.entry_id}/comments",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        data = response.get_json()
+        self.assertIn("_links", data[0])
+        self.assertEqual(data[0]["_links"]["self"]["href"], 
+                    f"/entries/{self.entry_id}/comments/{comment['comment_id']}")
+
+    def _create_comment(self):
+        response = self.client.post(
+            f"/entries/{self.entry_id}/comments",
+            json={"content": "Test comment"},
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        return response.get_json()
+        # In JournalEntryListResource test
+    def test_entry_list_hypermedia(self):
+        response = self.client.get("/entries/",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        data = response.get_json()
+        self.assertIn("_links", data[0])
+        self.assertIn("comments", data[0]["_links"])
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+
+# tests/test_journal_entry_routes.py
+# PWP_JournalAPI/tests/test_journal_entry_routes.py
+
+import unittest
+import json
+from app import create_app
+from extensions import db
+
+class TestJournalEntryRoutes(unittest.TestCase):
+    def setUp(self):
+        self.app = create_app({
+            "TESTING": True,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"
+        })
+        self.client = self.app.test_client()
+        with self.app.app_context():
+            db.create_all()
+            # Create and log in a user
+            self.client.post("/users/register", json={
+                "username": "testuser",
+                "email": "test@example.com",
+                "password": "password123"
+            })
+            response = self.client.post("/users/login", json={
+                "email": "test@example.com",
+                "password": "password123"
+            })
+            data = json.loads(response.data)
+            self.token = data["token"]
+
+    def tearDown(self):
+        with self.app.app_context():
+            db.session.remove()
+            db.drop_all()
+
+    def test_create_entry(self):
+        response = self.client.post("/entries/", json={
+            "title": "Test Entry",
+            "content": "Testing journal entry creation",
+            "tags": ["test", "journal"]
+        }, headers={"Authorization": f"Bearer {self.token}"})
+        self.assertEqual(response.status_code, 201)
+        data = json.loads(response.data)
+        self.assertIn("entry_id", data)
+    def test_get_all_entries(self):
+        # Create 2 test entries first
+        self._create_entry()
+        self._create_entry()
+        
+        response = self.client.get("/entries/",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(len(data), 2)
+        self.assertIn("_links", data[0])  # Verify hypermedia
+
+    def test_get_nonexistent_entry(self):
+        response = self.client.get("/entries/999",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(response.status_code, 404)
+
+    # def test_update_entry_invalid_data(self):
+    #     entry = self._create_entry()
+    #     response = self.client.put(f"/entries/{entry['entry_id']}",
+    #         json={"title": ""},  # Invalid empty title
+    #         headers={"Authorization": f"Bearer {self.token}"}
+    #     )
+    #     self.assertEqual(response.status_code, 422)
+    #     self.assertIn("Title cannot be empty", str(response.data))
+    
+    def test_update_entry_invalid_data(self):
+        entry = self._create_entry()
+        response = self.client.put(
+            f"/entries/{entry['entry_id']}",
+            json={"title": "", "content": "Updated content", "tags": ["test"]},  # Empty title now triggers validation
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(response.status_code, 422)
+        # Check that the error message contains "Title cannot be empty"
+        self.assertIn("Title cannot be empty", str(response.get_data(as_text=True)))
+
+    def _create_entry(self):
+        response = self.client.post("/entries/", json={
+            "title": "Test Entry",
+            "content": "Test Content",
+            "tags": ["test"]
+        }, headers={"Authorization": f"Bearer {self.token}"})
+        return response.get_json()
+    # In JournalEntryListResource test
+    def test_entry_list_hypermedia(self):
+        response = self.client.get("/entries/",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        data = response.get_json()
+        self.assertIn("_links", data[0])
+        self.assertIn("comments", data[0]["_links"])
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+# tests/test_models.py
+import unittest
+from app import create_app
+from extensions import db
+from journalapi.models import User, JournalEntry, Comment
+
+class TestModels(unittest.TestCase):
+    def setUp(self):
+        self.app = create_app({"TESTING": True})
+        self.client = self.app.test_client()
+        with self.app.app_context():
+            db.create_all()
+
+    def test_user_deletion_cascade(self):
+        # Create user with entry and comment
+        user = User(username="test", email="test@test.com", password="pass")
+        entry = JournalEntry(user_id=user.id, title="Test", content="Content")
+        comment = Comment(journal_entry_id=entry.id, user_id=user.id, content="Comment")
+        
+        with self.app.app_context():
+            db.session.add_all([user, entry, comment])
+            db.session.commit()
+            db.session.delete(user)
+            db.session.commit()
+
+            self.assertEqual(JournalEntry.query.count(), 0)
+            self.assertEqual(Comment.query.count(), 0)
+
+# tests/test_security.py
+import unittest
+from app import create_app
+
+class TestSecurity(unittest.TestCase):
+    def setUp(self):
+        self.app = create_app({"TESTING": True})
+        self.client = self.app.test_client()
+
+    def test_protected_routes(self):
+        routes = [
+            ("GET", "/users/1"),
+            ("POST", "/entries/"),
+            ("PUT", "/entries/1"),
+            ("DELETE", "/entries/1")
+        ]
+        
+        for method, path in routes:
+            response = getattr(self.client, method.lower())(path)
+            self.assertEqual(response.status_code, 401)
+
+# tests/test_user_routes.py
+# PWP_JournalAPI/tests/test_user_routes.py
+
+import sys
+import os
+import unittest
+from werkzeug.security import generate_password_hash
+from flask_jwt_extended import create_access_token
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from app import create_app
+from extensions import db
+from journalapi.models import User
+
+class TestUserRoutes(unittest.TestCase):
+    def setUp(self):
+        self.app = create_app({
+            "TESTING": True,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"
+        })
+        self.client = self.app.test_client()
+
+        with self.app.app_context():
+            db.create_all()
+
+            # Create test user
+            hashed_password = generate_password_hash("password123")
+            user = User(username="testuser", email="test@example.com", password=hashed_password)
+            db.session.add(user)
+            db.session.commit()
+
+            self.user_id = user.id  # integer
+            # create token as string
+            self.token = create_access_token(identity=str(self.user_id))
+
+    def tearDown(self):
+        with self.app.app_context():
+            db.drop_all()
+
+    def test_get_user(self):
+        # 200 if user matches token
+        response = self.client.get(
+            f"/users/{self.user_id}",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        print("DEBUG [test_get_user] response JSON:", response.get_json())
+        print("DEBUG [test_get_user] status code:", response.status_code)
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertIn("username", data)
+
+    def test_update_user(self):
+        # 200 if user matches token
+        response = self.client.put(
+            f"/users/{self.user_id}",
+            json={"username": "updateduser", "email": "updated@example.com", "password": "newpassword123"},
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        print("DEBUG [test_update_user] response JSON:", response.get_json())
+        print("DEBUG [test_update_user] status code:", response.status_code)
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertIn("updated", data["message"].lower())
+
+    def test_delete_user(self):
+        # 200 if user matches token
+        response = self.client.delete(
+            f"/users/{self.user_id}",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        print("DEBUG [test_delete_user] response JSON:", response.get_json())
+        print("DEBUG [test_delete_user] status code:", response.status_code)
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertIn("deleted successfully", data["message"].lower())
+        
+    def test_get_other_user(self):
+        # Should return 403 Forbidden
+        response = self.client.get(
+            f"/users/{self.user_id + 1}",  # Different user ID
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_register_existing_email(self):
+        response = self.client.post("/users/register", json={
+            "username": "newuser",
+            "email": "test@example.com",  # Already exists
+            "password": "password123"
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("already exists", response.get_json()["error"])
+
+    def test_invalid_login(self):
+        response = self.client.post("/users/login", json={
+            "email": "wrong@example.com",
+            "password": "invalid"
+        })
+        self.assertEqual(response.status_code, 401)
+    # In JournalEntryListResource test
+    def test_entry_list_hypermedia(self):
+        response = self.client.get("/entries/",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        data = response.get_json()
+        self.assertIn("_links", data[0])
+        self.assertIn("comments", data[0]["_links"])
+
+if __name__ == "__main__":
+    unittest.main()
+
+

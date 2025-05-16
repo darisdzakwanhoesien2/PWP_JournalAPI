@@ -60,14 +60,25 @@ class TestJournalEntryRoutes(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 404)
 
+    # def test_update_entry_invalid_data(self):
+    #     entry = self._create_entry()
+    #     response = self.client.put(f"/entries/{entry['entry_id']}",
+    #         json={"title": ""},  # Invalid empty title
+    #         headers={"Authorization": f"Bearer {self.token}"}
+    #     )
+    #     self.assertEqual(response.status_code, 422)
+    #     self.assertIn("Title cannot be empty", str(response.data))
+    
     def test_update_entry_invalid_data(self):
         entry = self._create_entry()
-        response = self.client.put(f"/entries/{entry['entry_id']}",
-            json={"title": ""},  # Invalid empty title
+        response = self.client.put(
+            f"/entries/{entry['entry_id']}",
+            json={"title": "", "content": "Updated content", "tags": ["test"]},  # Empty title now triggers validation
             headers={"Authorization": f"Bearer {self.token}"}
         )
         self.assertEqual(response.status_code, 422)
-        self.assertIn("Title cannot be empty", str(response.data))
+        # Check that the error message contains "Title cannot be empty"
+        self.assertIn("Title cannot be empty", str(response.get_data(as_text=True)))
 
     def _create_entry(self):
         response = self.client.post("/entries/", json={
