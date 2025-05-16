@@ -7,7 +7,7 @@ from flask_jwt_extended import create_access_token
 from unittest.mock import patch
 from app import create_app
 from extensions import db
-from journalapi.models import User  # Added import
+from journalapi.models import User
 
 class TestUserRoutes(unittest.TestCase):
     def setUp(self):
@@ -63,6 +63,21 @@ class TestUserRoutes(unittest.TestCase):
         data = response.get_json()
         self.assertIn("email already registered", data["error"].lower())
 
+    def test_register_duplicate_username(self):
+        response = self.client.post(
+            "/users/register",
+            json={
+                "username": "testuser",  # Duplicate username
+                "email": "new2@example.com",
+                "password": "password123"
+            }
+        )
+        print("DEBUG [test_register_duplicate_username] response JSON:", response.get_json())
+        print("DEBUG [test_register_duplicate_username] status code:", response.status_code)
+        self.assertEqual(response.status_code, 400)
+        data = response.get_json()
+        self.assertIn("username already taken", data["error"].lower())
+
     def test_register_invalid_data(self):
         response = self.client.post(
             "/users/register",
@@ -90,6 +105,22 @@ class TestUserRoutes(unittest.TestCase):
             )
         print("DEBUG [test_register_internal_error] response JSON:", response.get_json())
         print("DEBUG [test_register_internal_error] status code:", response.status_code)
+        self.assertEqual(response.status_code, 500)
+        data = response.get_json()
+        self.assertIn("internal server error", data["error"].lower())
+
+    def test_register_server_error(self):
+        with patch('journalapi.resources.user.generate_password_hash', side_effect=Exception("Hashing error")):
+            response = self.client.post(
+                "/users/register",
+                json={
+                    "username": "servererror",
+                    "email": "servererror@example.com",
+                    "password": "password123"
+                }
+            )
+        print("DEBUG [test_register_server_error] response JSON:", response.get_json())
+        print("DEBUG [test_register_server_error] status code:", response.status_code)
         self.assertEqual(response.status_code, 500)
         data = response.get_json()
         self.assertIn("internal server error", data["error"].lower())
@@ -134,7 +165,7 @@ class TestUserRoutes(unittest.TestCase):
         self.assertIn("username", data)
 
     def test_get_user_unauthorized(self):
-        with self.app.app_context():  # Add application context
+        with self.app.app_context():
             other_token = create_access_token(identity=str(self.user_id + 1))
         response = self.client.get(
             f"/users/{self.user_id}",
@@ -145,6 +176,21 @@ class TestUserRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         data = response.get_json()
         self.assertIn("unauthorized", data["error"].lower())
+
+    def test_get_user_not_found(self):
+        with self.app.app_context():
+            # Use a non-existent user ID but valid JWT identity
+            non_existent_id = self.user_id + 999
+            token = create_access_token(identity=str(non_existent_id))
+        response = self.client.get(
+            f"/users/{non_existent_id}",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        print("DEBUG [test_get_user_not_found] response JSON:", response.get_json())
+        print("DEBUG [test_get_user_not_found] status code:", response.status_code)
+        self.assertEqual(response.status_code, 404)
+        data = response.get_json()
+        self.assertIn("not found", data["error"].lower())
 
     def test_update_user(self):
         response = self.client.put(
@@ -158,6 +204,20 @@ class TestUserRoutes(unittest.TestCase):
         data = response.get_json()
         self.assertIn("updated", data["message"].lower())
 
+    def test_update_user_unauthorized(self):
+        with self.app.app_context():
+            other_token = create_access_token(identity=str(self.user_id + 1))
+        response = self.client.put(
+            f"/users/{self.user_id}",
+            json={"username": "unauthorized", "email": "unauth@example.com"},
+            headers={"Authorization": f"Bearer {other_token}"}
+        )
+        print("DEBUG [test_update_user_unauthorized] response JSON:", response.get_json())
+        print("DEBUG [test_update_user_unauthorized] status code:", response.status_code)
+        self.assertEqual(response.status_code, 403)
+        data = response.get_json()
+        self.assertIn("unauthorized", data["error"].lower())
+
     def test_delete_user(self):
         response = self.client.delete(
             f"/users/{self.user_id}",
@@ -168,6 +228,27 @@ class TestUserRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertIn("deleted successfully", data["message"].lower())
+
+    def test_delete_user_unauthorized(self):
+        with self.app.app_context():
+            other_token = create_access_token(identity=str(self.user_id + 1))
+        response = self.client.delete(
+            f"/users/{self.user_id}",
+            headers={"Authorization": f"Bearer {other_token}"}
+        )
+        print("DEBUG [test_delete_user_unauthorized] response JSON:", response.get_json())
+        print("DEBUG [test_delete_user_unauthorized] status code:", response.status_code)
+        self.assertEqual(response.status_code, 403)
+        data = response.get_json()
+        self.assertIn("unauthorized", data["error"].lower())
+
+    def test_user_to_dict(self):
+        with self.app.app_context():
+            user = User.query.get(self.user_id)
+            user_dict = user.to_dict()
+            self.assertEqual(user_dict["username"], "testuser")
+            self.assertEqual(user_dict["email"], "test@example.com")
+            self.assertEqual(user_dict["id"], self.user_id)
 
 if __name__ == "__main__":
     unittest.main()

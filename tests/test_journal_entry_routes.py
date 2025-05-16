@@ -5,7 +5,7 @@ from app import create_app
 from extensions import db
 from werkzeug.security import generate_password_hash
 from flask_jwt_extended import create_access_token
-from journalapi.models import User  # Added import
+from journalapi.models import User
 
 class TestJournalEntryRoutes(unittest.TestCase):
     def setUp(self):
@@ -39,6 +39,38 @@ class TestJournalEntryRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertEqual(len(data), 0)
+
+    def test_get_entries_multiple(self):
+        # Create multiple entries
+        self.client.post(
+            "/entries/",
+            json={
+                "title": "Entry 1",
+                "content": "Content 1",
+                "tags": ["tag1"]
+            },
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.client.post(
+            "/entries/",
+            json={
+                "title": "Entry 2",
+                "content": "Content 2",
+                "tags": ["tag2"]
+            },
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        response = self.client.get(
+            "/entries/",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        print("DEBUG [test_get_entries_multiple] response JSON:", response.get_json())
+        print("DEBUG [test_get_entries_multiple] status code:", response.status_code)
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(len(data), 2)
+        self.assertEqual(data[0]["title"], "Entry 1")
+        self.assertEqual(data[1]["title"], "Entry 2")
 
     def test_create_entry(self):
         response = self.client.post(
@@ -178,6 +210,47 @@ class TestJournalEntryRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertIn("deleted successfully", data["message"].lower())
+
+    def test_delete_entry_unauthorized(self):
+        with self.app.app_context():
+            hashed_password = generate_password_hash("password123")
+            other_user = User(username="otheruser", email="other@example.com", password=hashed_password)
+            db.session.add(other_user)
+            db.session.commit()
+            other_token = create_access_token(identity=str(other_user.id))
+
+        create_response = self.client.post(
+            "/entries/",
+            json={
+                "title": "Test Entry",
+                "content": "Testing journal entry creation",
+                "tags": ["test", "journal"]
+            },
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(create_response.status_code, 201)
+        entry_id = create_response.get_json()["entry_id"]
+
+        response = self.client.delete(
+            f"/entries/{entry_id}",
+            headers={"Authorization": f"Bearer {other_token}"}
+        )
+        print("DEBUG [test_delete_entry_unauthorized] response JSON:", response.get_json())
+        print("DEBUG [test_delete_entry_unauthorized] status code:", response.status_code)
+        self.assertEqual(response.status_code, 404)
+        data = response.get_json()
+        self.assertIn("error", data)
+
+    def test_delete_entry_not_found(self):
+        response = self.client.delete(
+            "/entries/999",
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        print("DEBUG [test_delete_entry_not_found] response JSON:", response.get_json())
+        print("DEBUG [test_delete_entry_not_found] status code:", response.status_code)
+        self.assertEqual(response.status_code, 404)
+        data = response.get_json()
+        self.assertIn("error", data)
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,6 +2,7 @@
 import sys
 import os
 import unittest
+from datetime import datetime, timezone  # Added import
 from werkzeug.security import generate_password_hash
 from flask_jwt_extended import create_access_token
 from app import create_app
@@ -30,7 +31,7 @@ class TestCommentRoutes(unittest.TestCase):
 
             self.user_id = user.id
             # IMPORTANT: use str(...) for the identity
-            self.token = create_access_token(identity=str(user.id))  # Fixed: use user.id
+            self.token = create_access_token(identity=str(user.id))
 
             # Create a test journal entry
             entry = JournalEntry(
@@ -45,6 +46,20 @@ class TestCommentRoutes(unittest.TestCase):
     def tearDown(self):
         with self.app.app_context():
             db.drop_all()
+
+    def test_comment_to_dict(self):
+        with self.app.app_context():
+            comment = Comment(
+                journal_entry_id=self.entry_id,
+                user_id=self.user_id,
+                content="Test comment",
+                timestamp=datetime.now(timezone.utc)
+            )
+            db.session.add(comment)
+            db.session.commit()
+            comment_dict = comment.to_dict()
+            self.assertEqual(comment_dict["content"], "Test comment")
+            self.assertIn("timestamp", comment_dict)
 
     def test_add_comment(self):
         response = self.client.post(
@@ -109,8 +124,109 @@ class TestCommentRoutes(unittest.TestCase):
         print("DEBUG [test_update_comment] response JSON:", update_resp.get_json())
         print("DEBUG [test_update_comment] status code:", update_resp.status_code)
 
-        self.assertEqual(update_resp.status_code, 200)  # Fixed: Correct assertion
+        self.assertEqual(update_resp.status_code, 200)
         self.assertIn("fully replaced", update_resp.get_json()["message"].lower())
+
+    def test_update_comment_unauthorized(self):
+        # Create a second user
+        with self.app.app_context():
+            hashed_password = generate_password_hash("password123")
+            other_user = User(username="otheruser", email="other@example.com", password=hashed_password)
+            db.session.add(other_user)
+            db.session.commit()
+            other_token = create_access_token(identity=str(other_user.id))
+
+        # Create a comment with the first user
+        create_resp = self.client.post(
+            f"/entries/{self.entry_id}/comments",
+            json={"content": "Original Comment"},
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(create_resp.status_code, 201)
+        comment_id = create_resp.get_json()["comment_id"]
+
+        # Try to update with the second user's token
+        update_resp = self.client.put(
+            f"/entries/{self.entry_id}/comments/{comment_id}",
+            json={"content": "Unauthorized Update"},
+            headers={"Authorization": f"Bearer {other_token}"}
+        )
+        print("DEBUG [test_update_comment_unauthorized] response JSON:", update_resp.get_json())
+        print("DEBUG [test_update_comment_unauthorized] status code:", update_resp.status_code)
+        self.assertEqual(update_resp.status_code, 404)
+        data = update_resp.get_json()
+        self.assertIn("error", data)
+
+    def test_update_comment_invalid_entry_id(self):
+        # Create a comment
+        create_resp = self.client.post(
+            f"/entries/{self.entry_id}/comments",
+            json={"content": "Test comment"},
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(create_resp.status_code, 201)
+        comment_id = create_resp.get_json()["comment_id"]
+
+        # Try to update with invalid entry_id
+        response = self.client.put(
+            f"/entries/999/comments/{comment_id}",
+            json={"content": "Updated comment"},
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        print("DEBUG [test_update_comment_invalid_entry_id] response JSON:", response.get_json())
+        print("DEBUG [test_update_comment_invalid_entry_id] status code:", response.status_code)
+        self.assertEqual(response.status_code, 404)
+        data = response.get_json()
+        self.assertIn("error", data)
+
+    def test_update_comment_invalid_data(self):
+        create_resp = self.client.post(
+            f"/entries/{self.entry_id}/comments",
+            json={"content": "Original Comment"},
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(create_resp.status_code, 201)
+        comment_id = create_resp.get_json()["comment_id"]
+
+        response = self.client.put(
+            f"/entries/{self.entry_id}/comments/{comment_id}",
+            json={"content": ""},  # Invalid: empty content
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        print("DEBUG [test_update_comment_invalid_data] response JSON:", response.get_json())
+        print("DEBUG [test_update_comment_invalid_data] status code:", response.status_code)
+        self.assertEqual(response.status_code, 422)
+        data = response.get_json()
+        self.assertIn("errors", data)
+
+    def test_delete_comment_unauthorized(self):
+        # Create a second user
+        with self.app.app_context():
+            hashed_password = generate_password_hash("password123")
+            other_user = User(username="otheruser", email="other@example.com", password=hashed_password)
+            db.session.add(other_user)
+            db.session.commit()
+            other_token = create_access_token(identity=str(other_user.id))
+
+        # Create a comment with the first user
+        create_resp = self.client.post(
+            f"/entries/{self.entry_id}/comments",
+            json={"content": "Comment to delete"},
+            headers={"Authorization": f"Bearer {self.token}"}
+        )
+        self.assertEqual(create_resp.status_code, 201)
+        comment_id = create_resp.get_json()["comment_id"]
+
+        # Try to delete with the second user's token
+        delete_resp = self.client.delete(
+            f"/entries/{self.entry_id}/comments/{comment_id}",
+            headers={"Authorization": f"Bearer {other_token}"}
+        )
+        print("DEBUG [test_delete_comment_unauthorized] response JSON:", delete_resp.get_json())
+        print("DEBUG [test_delete_comment_unauthorized] status code:", delete_resp.status_code)
+        self.assertEqual(delete_resp.status_code, 404)
+        data = delete_resp.get_json()
+        self.assertIn("error", data)
 
     def test_delete_comment(self):
         create_resp = self.client.post(

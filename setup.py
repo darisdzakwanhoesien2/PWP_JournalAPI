@@ -10,11 +10,15 @@ setup(
     include_package_data=True,
     zip_safe=False,
     install_requires=[
-        "flask",
-        "flask-restful",
-        "flask-sqlalchemy",
-        "flask-jwt-extended",
-        "werkzeug"
-    ],
+    "flask",
+    "flask-restful",
+    "flask-sqlalchemy",
+    "flask-jwt-extended",
+    "werkzeug>=2.3.8",
+    "requests",
+    "typer",
+    "marshmallow",
+    "click"
+],
     python_requires='>=3.7',
 )
