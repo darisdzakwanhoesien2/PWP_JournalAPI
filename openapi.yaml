@@ -1,0 +1,393 @@
+openapi: 3.0.0
+info:
+  title: PWP Journal API
+  description: RESTful journaling platform with JWT auth, hypermedia, and modular routes.
+  version: "1.0.0"
+
+servers:
+  - url: http://localhost:8000
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    UserRegistration:
+      type: object
+      required: [username, email, password]
+      properties:
+        username:
+          type: string
+          example: johndoe
+        email:
+          type: string
+          format: email
+          example: johndoe@example.com
+        password:
+          type: string
+          format: password
+          example: SecretPassword123
+
+    UserLogin:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          example: johndoe@example.com
+        password:
+          type: string
+          example: SecretPassword123
+
+    JWTToken:
+      type: object
+      properties:
+        token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+    JournalEntryInput:
+      type: object
+      required: [title, content]
+      properties:
+        title:
+          type: string
+          example: My First Entry
+        content:
+          type: string
+          example: Today, I started using this journaling API!
+        tags:
+          type: array
+          items:
+            type: string
+          example: [personal, daily]
+
+    CommentInput:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          example: Great entry!
+
+    HypermediaLinks:
+      type: object
+      properties:
+        self:
+          type: object
+          properties:
+            href:
+              type: string
+        edit:
+          type: object
+          properties:
+            href:
+              type: string
+        delete:
+          type: object
+          properties:
+            href:
+              type: string
+        comments:
+          type: object
+          properties:
+            href:
+              type: string
+        history:
+          type: object
+          properties:
+            href:
+              type: string
+
+paths:
+  /users/register:
+    post:
+      summary: Register a new user
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRegistration'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              example:
+                message: User registered successfully
+        '400':
+          description: Duplicate email or username
+          content:
+            application/json:
+              example:
+                error: Username already taken
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              example:
+                errors:
+                  email: ["Not a valid email address"]
+
+  /users/login:
+    post:
+      summary: Login and retrieve a JWT token
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserLogin'
+      responses:
+        '200':
+          description: JWT token returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JWTToken'
+              example:
+                token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              example:
+                error: Invalid credentials
+
+  /entries/:
+    get:
+      summary: Get all journal entries for the current user
+      tags: [Journal Entries]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of journal entries with hypermedia links
+          content:
+            application/json:
+              example:
+                - id: 1
+                  title: My First Entry
+                  tags: [daily, personal]
+                  _links:
+                    self: { href: "/entries/1" }
+                    edit: { href: "/entries/1" }
+                    delete: { href: "/entries/1" }
+                    comments: { href: "/entries/1/comments" }
+
+    post:
+      summary: Create a new journal entry
+      tags: [Journal Entries]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JournalEntryInput'
+      responses:
+        '201':
+          description: Entry created
+          content:
+            application/json:
+              example:
+                id: 2
+                message: Entry created successfully
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              example:
+                errors:
+                  title: ["Missing data"]
+
+  /entries/{entry_id}:
+    get:
+      summary: Get a specific journal entry
+      tags: [Journal Entries]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Journal entry with hypermedia
+          content:
+            application/json:
+              example:
+                id: 1
+                title: My First Entry
+                content: Welcome to my journal
+                tags: [daily, personal]
+                _links:
+                  self: { href: "/entries/1" }
+        '404':
+          description: Entry not found
+
+    put:
+      summary: Update a journal entry
+      tags: [Journal Entries]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JournalEntryInput'
+      responses:
+        '200':
+          description: Entry updated
+        '404':
+          description: Entry not found
+
+    delete:
+      summary: Delete a journal entry
+      tags: [Journal Entries]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Entry deleted
+        '404':
+          description: Entry not found
+
+  /entries/{entry_id}/comments:
+    get:
+      summary: List comments for an entry
+      tags: [Comments]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of comments
+          content:
+            application/json:
+              example:
+                - id: 1
+                  content: Great entry!
+                  user: johndoe
+
+    post:
+      summary: Add a comment to an entry
+      tags: [Comments]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentInput'
+      responses:
+        '201':
+          description: Comment created
+        '422':
+          description: Validation error
+
+  /entries/{entry_id}/comments/{comment_id}:
+    put:
+      summary: Update a comment
+      tags: [Comments]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: comment_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentInput'
+      responses:
+        '200':
+          description: Comment updated
+        '404':
+          description: Not found
+
+    delete:
+      summary: Delete a comment
+      tags: [Comments]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: comment_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Comment deleted
+        '404':
+          description: Not found
+
+  /entries/{entry_id}/history:
+    get:
+      summary: View edit history for a journal entry
+      tags: [Journal Entries]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of edit history entries
+          content:
+            application/json:
+              example:
+                - timestamp: "2025-04-09T10:00:00Z"
+                  content: Updated entry with new thoughts

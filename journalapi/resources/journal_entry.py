@@ -1,10 +1,9 @@
-# PWP_JournalAPI/journalapi/resources/journal_entry.py
+# journalapi/resources/journal_entry.py
 from flask_restful import Resource
 from flask import request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from marshmallow import ValidationError
 import json
-
 from extensions import db
 from journalapi.models import JournalEntry
 from journalapi.utils import JsonResponse
@@ -23,17 +22,24 @@ class JournalEntryListResource(Resource):
                 "id": e.id,
                 "title": e.title,
                 "tags": json.loads(e.tags),
-                "last_updated": e.last_updated.isoformat() if e.last_updated else None
-            }
-            item["_links"] = {
-                "self": {"href": f"/entries/{e.id}"},
-                "edit": {"href": f"/entries/{e.id}"},
-                "delete": {"href": f"/entries/{e.id}"},
-                "comments": {"href": f"/entries/{e.id}/comments"},
-                "history": {"href": f"/entries/{e.id}/history"}
+                "last_updated": e.last_updated.isoformat() if e.last_updated else None,
+                "_links": {
+                    "self": {"href": f"/entries/{e.id}"},
+                    "edit": {"href": f"/entries/{e.id}"},
+                    "delete": {"href": f"/entries/{e.id}"},
+                    "comments": {"href": f"/entries/{e.id}/comments"},
+                    "history": {"href": f"/entries/{e.id}/history"}
+                }
             }
             data.append(item)
-        return JsonResponse(data, 200)
+        response_data = {
+            "entries": data,
+            "_links": {
+                "self": {"href": "/entries"},
+                "create": {"href": "/entries"}
+            }
+        }
+        return JsonResponse(response_data, 200)
 
     @jwt_required()
     def post(self):
@@ -42,7 +48,6 @@ class JournalEntryListResource(Resource):
             data = entry_schema.load(request.get_json())
         except ValidationError as err:
             return JsonResponse({"errors": err.messages}, 422)
-
         new_entry = JournalEntry(
             user_id=user_id,
             title=data["title"],
@@ -53,7 +58,17 @@ class JournalEntryListResource(Resource):
         )
         db.session.add(new_entry)
         db.session.commit()
-        return JsonResponse({"entry_id": new_entry.id}, 201)
+        response_data = {
+            "entry_id": new_entry.id,
+            "_links": {
+                "self": {"href": f"/entries/{new_entry.id}"},
+                "edit": {"href": f"/entries/{new_entry.id}"},
+                "delete": {"href": f"/entries/{new_entry.id}"},
+                "comments": {"href": f"/entries/{new_entry.id}/comments"},
+                "history": {"href": f"/entries/{new_entry.id}/history"}
+            }
+        }
+        return JsonResponse(response_data, 201)
 
 class JournalEntryResource(Resource):
     @jwt_required()
@@ -79,16 +94,24 @@ class JournalEntryResource(Resource):
             data = entry_schema.load(request.get_json())
         except ValidationError as err:
             return JsonResponse({"errors": err.messages}, 422)
-
         entry = db.session.get(JournalEntry, entry_id)
         if not entry or entry.user_id != user_id:
             return JsonResponse({"error": "Not found"}, 404)
-
         entry.title = data["title"]
         entry.content = data["content"]
         entry.tags = json.dumps(data["tags"])
         db.session.commit()
-        return JsonResponse({"message": "Entry fully replaced"}, 200)
+        response_data = {
+            "message": "Entry fully replaced",
+            "_links": {
+                "self": {"href": f"/entries/{entry_id}"},
+                "edit": {"href": f"/entries/{entry_id}"},
+                "delete": {"href": f"/entries/{entry_id}"},
+                "comments": {"href": f"/entries/{entry_id}/comments"},
+                "history": {"href": f"/entries/{entry_id}/history"}
+            }
+        }
+        return JsonResponse(response_data, 200)
 
     @jwt_required()
     def delete(self, entry_id):
@@ -98,4 +121,11 @@ class JournalEntryResource(Resource):
             return JsonResponse({"error": "Not found"}, 404)
         db.session.delete(entry)
         db.session.commit()
-        return JsonResponse({"message": "Entry deleted successfully"}, 200)
+        response_data = {
+            "message": "Entry deleted successfully",
+            "_links": {
+                "self": {"href": "/entries"},
+                "create": {"href": "/entries"}
+            }
+        }
+        return JsonResponse(response_data, 200)

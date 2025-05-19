@@ -1,33 +1,27 @@
 import csv
 from app import create_app
 from extensions import db
-from models import User, JournalEntry, EditHistory, Comment
-from datetime import datetime
-import json
+from journalapi.models import User, JournalEntry, EditHistory, Comment
 from datetime import datetime, timezone
+import json
+from werkzeug.security import generate_password_hash
 
 app = create_app()
 
 def list_to_json(lst):
-    """Converts list to JSON string."""
     return json.dumps(lst)
 
 def insert_users(file_path):
-    """Reads users from file and inserts them into the database, avoiding duplicates."""
     with open(file_path, "r") as file, app.app_context():
         reader = csv.reader(file)
         for row in reader:
             username, email, password = [field.strip() for field in row]
-
-            # Check if user already exists
-            existing_user = db.session.query(User).filter_by(email=email).first()
-            if existing_user:
+            if db.session.query(User).filter_by(email=email).first():
                 print(f"⚠️ Skipping duplicate user: {email}")
                 continue
-
-            user = User(username=username, email=email, password=password)
+            hashed_pw = generate_password_hash(password)
+            user = User(username=username, email=email, password=hashed_pw)
             db.session.add(user)
-
         db.session.commit()
     print("✅ Users added successfully!")
 
@@ -44,7 +38,7 @@ def insert_journal_entries(file_path):
                 tags=list_to_json([tag.strip() for tag in tags.split(",")]),
                 sentiment_score=float(sentiment_score),
                 sentiment_tag=list_to_json([tag.strip() for tag in sentiment_tag.split(",")]),
-                last_updated = datetime.now(timezone.utc)  # Correct way to get current UTC time: Depreciated# last_updated=datetime.utcnow()
+                last_updated=datetime.now(timezone.UTC)  # Already updated
             )
             db.session.add(entry)
         db.session.commit()
@@ -59,7 +53,7 @@ def insert_edit_history(file_path):
             edit = EditHistory(
                 journal_entry_id=int(journal_entry_id),
                 user_id=int(user_id),
-                edited_at=datetime.now(timezone.utc), #datetime.utcnow(),
+                edited_at=datetime.now(timezone.UTC),  # Already updated
                 previous_content=previous_content.strip(),
                 new_content=new_content.strip()
             )
@@ -84,7 +78,7 @@ def insert_comments(file_path):
                 journal_entry_id=journal_entry_id,
                 user_id=user_id,
                 content=content,
-                timestamp=datetime.utcnow()
+                timestamp=datetime.now(timezone.UTC)  # Updated
             )
             db.session.add(comment)
 

@@ -1,0 +1,45 @@
+# Python generated files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+.env
+
+# Flask instance folder (SQLite database, secrets)
+instance/
+*.db
+
+# Pytest and coverage
+.pytest_cache/
+htmlcov/
+.coverage
+*.xml
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.swp
+*.swo
+*.tmp
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Docker artifacts
+*.dockerignore
+
+# macOS/Windows artifacts
+.DS_Store
+Thumbs.db
+
+# Project-specific exclusions
+*.bak
+*.backup
