@@ -6,7 +6,7 @@
 * Student 3. Name and email
 * Student 4. Name and email
 
-![Database ERD](database-schema.png "Entity-Relationship Diagram for the Journal System")
+![Architecture](architecture.png "Architecture")
 
 
 # Journal API
