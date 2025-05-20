@@ -6,7 +6,7 @@
 * Student 3. Name and email
 * Student 4. Name and email
 
-![Architecture](architecture.png "Architecture")
+![Architecture](architecture.jpeg "Architecture")
 
 
 # Journal API
