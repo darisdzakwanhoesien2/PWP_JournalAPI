@@ -6,6 +6,9 @@
 * Student 3. Name and email
 * Student 4. Name and email
 
+![Database ERD](database-schema.png "Entity-Relationship Diagram for the Journal System")
+
+
 # Journal API
 
 The Journal API is a RESTful web service designed to help users manage daily journaling activities. It allows users to create, view, edit, and delete journal entries, perform sentiment analysis on entries, and interact with comments on public or shared entries. The API is built using Flask, a lightweight Python web framework, and uses SQLite for database management.
@@ -71,6 +74,8 @@ This will create the necessary tables in the database. To populate the database 
 ```bash
 python insert_from_files.py
 ```
+
+
 
 ---
 
