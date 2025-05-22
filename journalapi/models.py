@@ -2,9 +2,7 @@
 from datetime import datetime
 import json
 from werkzeug.security import check_password_hash
-from flask_sqlalchemy import SQLAlchemy
-
-db = SQLAlchemy()
+from extensions import db
 
 class User(db.Model):
     """Represents a user in the Journal API."""
@@ -38,7 +36,8 @@ class User(db.Model):
             password (str): The password to verify.
         
         Returns:
-            bool: True if the password matches, False otherwise."""        
+            bool: True if the password matches, False otherwise.
+        """
         return check_password_hash(self.password, password)
 
 class JournalEntry(db.Model):
@@ -122,5 +121,4 @@ class EditHistory(db.Model):
             "id": self.id,
             "journal_entry_id": self.journal_entry_id,
             "old_content": self.old_content,
-            "edited_at": self.edited_at.isoformat() if self.edited_at else None
-        }
+            "edited_at": self.edited_at.isoformat() if self.edited_at else None}
