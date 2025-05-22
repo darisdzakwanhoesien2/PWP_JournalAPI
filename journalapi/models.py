@@ -1,59 +1,98 @@
-# PWP_JournalAPI/journalapi/models.py
-# journalapi/models.py
+"""Database models for the Journal API."""
 from datetime import datetime
 import json
-from extensions import db
+from werkzeug.security import check_password_hash
+from flask_sqlalchemy import SQLAlchemy
+
+db = SQLAlchemy()
 
 class User(db.Model):
-    __tablename__ = "users"
+    """Represents a user in the Journal API."""
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(50), nullable=False)
-    email = db.Column(db.String(100), unique=True, nullable=False)
-    password = db.Column(db.String(255), nullable=False)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password = db.Column(db.String(128), nullable=False)
+    entries = db.relationship("JournalEntry", backref="user", lazy=True)
+    comments = db.relationship("Comment", backref="user", lazy=True)
 
-    journal_entries = db.relationship("JournalEntry", backref="author", cascade="all, delete-orphan")
-    comments = db.relationship("Comment", backref="author", cascade="all, delete-orphan")
-    edit_histories = db.relationship("EditHistory", backref="editor", cascade="all, delete-orphan")
+    def __repr__(self):
+        """Return a string representation of the User."""
+        return f"<User {self.username}>"
 
     def to_dict(self):
-        return {"id": self.id, "username": self.username, "email": self.email}
-
-class JournalEntry(db.Model):
-    __tablename__ = "journal_entries"
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    title = db.Column(db.String(200), nullable=False)
-    content = db.Column(db.Text, nullable=False)
-    tags = db.Column(db.String, default="[]")
-    sentiment_score = db.Column(db.Float)
-    sentiment_tag = db.Column(db.String, default="[]")
-    date = db.Column(db.DateTime, default=datetime.utcnow)
-    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    comments = db.relationship("Comment", backref="journal_entry", cascade="all, delete-orphan")
-    edit_histories = db.relationship("EditHistory", backref="journal_entry", cascade="all, delete-orphan")
-
-    def to_dict(self):
+        """Convert the User to a dictionary.
+        
+        Returns:
+            dict: User data as a dictionary.
+        """
         return {
             "id": self.id,
+            "username": self.username,
+            "email": self.email
+        }
+
+    def check_password(self, password):
+        """Check if the provided password matches the stored hash.
+        
+        Args:
+            password (str): The password to verify.
+        
+        Returns:
+            bool: True if the password matches, False otherwise."""        
+        return check_password_hash(self.password, password)
+
+class JournalEntry(db.Model):
+    """Represents a journal entry in the Journal API."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    title = db.Column(db.String(100), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    tags = db.Column(db.Text, nullable=True)
+    sentiment_score = db.Column(db.Float, nullable=True)
+    sentiment_tag = db.Column(db.Text, nullable=True)
+    last_updated = db.Column(db.DateTime, nullable=True)
+    comments = db.relationship("Comment", backref="journal_entry", lazy=True)
+    history = db.relationship("EditHistory", backref="journal_entry", lazy=True)
+
+    def __repr__(self):
+        """Return a string representation of the JournalEntry."""
+        return f"<JournalEntry {self.id}>"
+
+    def to_dict(self):
+        """Convert the JournalEntry to a dictionary.
+        
+        Returns:
+            dict: JournalEntry data as a dictionary.
+        """
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
             "title": self.title,
             "content": self.content,
-            "tags": json.loads(self.tags),
+            "tags": json.loads(self.tags) if self.tags else [],
             "sentiment_score": self.sentiment_score,
             "sentiment_tag": json.loads(self.sentiment_tag) if self.sentiment_tag else [],
-            "date": self.date.isoformat() if self.date else None,
             "last_updated": self.last_updated.isoformat() if self.last_updated else None
         }
 
 class Comment(db.Model):
-    __tablename__ = "comments"
+    """Represents a comment on a journal entry."""
     id = db.Column(db.Integer, primary_key=True)
-    journal_entry_id = db.Column(db.Integer, db.ForeignKey("journal_entries.id"), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    journal_entry_id = db.Column(db.Integer, db.ForeignKey("journal_entry.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     content = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
+    def __repr__(self):
+        """Return a string representation of the Comment."""
+        return f"<Comment {self.id}>"
+
     def to_dict(self):
+        """Convert the Comment to a dictionary.
+        
+        Returns:
+            dict: Comment data as a dictionary.
+        """
         return {
             "id": self.id,
             "journal_entry_id": self.journal_entry_id,
@@ -63,20 +102,25 @@ class Comment(db.Model):
         }
 
 class EditHistory(db.Model):
-    __tablename__ = "edit_history"
+    """Tracks edit history for journal entries."""
     id = db.Column(db.Integer, primary_key=True)
-    journal_entry_id = db.Column(db.Integer, db.ForeignKey("journal_entries.id"), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    journal_entry_id = db.Column(db.Integer, db.ForeignKey("journal_entry.id"), nullable=False)
+    old_content = db.Column(db.Text, nullable=False)
     edited_at = db.Column(db.DateTime, default=datetime.utcnow)
-    previous_content = db.Column(db.Text, nullable=False)
-    new_content = db.Column(db.Text, nullable=False)
+
+    def __repr__(self):
+        """Return a string representation of the EditHistory."""
+        return f"<EditHistory {self.id}>"
 
     def to_dict(self):
+        """Convert the EditHistory to a dictionary.
+        
+        Returns:
+            dict: EditHistory data as a dictionary.
+        """
         return {
             "id": self.id,
             "journal_entry_id": self.journal_entry_id,
-            "user_id": self.user_id,
-            "edited_at": self.edited_at.isoformat() if self.edited_at else None,
-            "previous_content": self.previous_content,
-            "new_content": self.new_content
+            "old_content": self.old_content,
+            "edited_at": self.edited_at.isoformat() if self.edited_at else None
         }

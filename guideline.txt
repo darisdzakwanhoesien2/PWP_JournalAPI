@@ -1,0 +1,43 @@
+Need to ensure that 
+
+
+pip install -r requirements.txt
+
+# Init DB (local SQLite)
+python init_db.py
+
+# Start API (dev)
+flask --app app run --port=8000
+
+# Access Swagger UI:
+http://localhost:8000/apidocs/
+```
+
+---
+
+## 🐳 Docker Deployment
+```bash
+# Build and start containers
+docker-compose up --build
+
+# Init DB in container
+docker-compose exec journal-api python init_db.py
+```
+
+---
+
+## 💻 CLI Client (Typer)
+```bash
+cd client/
+
+# Register
+python main.py auth register --username alice --email alice@example.com --password secure123
+
+# Login
+python main.py auth login --email alice@example.com --password secure123
+
+# View entries
+python main.py entry list
+
+# Add entry
+python main.py entry create --title "Test" --content "My first entry" --tags life,personal

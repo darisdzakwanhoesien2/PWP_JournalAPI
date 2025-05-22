@@ -7,7 +7,7 @@ from flasgger import Swagger
 from extensions import db
 from journalapi.api import api_bp
 from journalapi.cli import init_db_command
-from journalapi.utils import JsonResponse  # ✅ Custom response utility
+from journalapi.utils import json_response  # ✅ Custom response utility
 
 def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
@@ -36,7 +36,7 @@ def create_app(test_config=None):
     # ✅ Add a root health-check route
     @app.route("/")
     def root():
-        return JsonResponse({"message": "✅ Journal API is running!"}, 200)
+        return json_response({"message": "✅ Journal API is running!"}, 200)
 
     # Register blueprint and CLI command
     app.register_blueprint(api_bp)
