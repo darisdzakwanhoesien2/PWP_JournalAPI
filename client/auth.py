@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from client.config import TOKEN_FILE
+from config import TOKEN_FILE
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
