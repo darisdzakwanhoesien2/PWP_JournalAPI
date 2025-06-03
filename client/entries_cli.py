@@ -1,77 +1,100 @@
 # PWP_JournalAPI/client/entries_cli.py
+"""CLI commands for managing journal entries in the Journal API."""
 import typer
 import requests
-from rich import print
-import auth, config
+from rich.console import Console
+from client import auth
+from client import config
+import logging
 
-entry_app = typer.Typer(help="Manage journal entries")
-
+console = Console()
+entry_app = typer.Typer(help="Manage journal entries in Journal API")
+logger = logging.getLogger(__name__)
 
 @entry_app.command("list")
-def list_entries():
-    """
-    List all your journal entries.
-    """
-    token = auth.get_token()
-    if not token:
-        print("[red]❌ You must login first[/red]")
+def list_entries() -> None:
+    """List all your journal entries."""
+    auth_headers = auth.get_auth()
+    if not auth_headers:
+        console.print("[red]❌ Please login first.[/red]")
         raise typer.Exit()
-
-    res = requests.get(f"{config.API_URL}/entries/", headers={"Authorization": f"Bearer {token}"})
-    if res.status_code == 200:
+    try:
+        res = requests.get(
+            f"{config.API_URL}/journal_entries",
+            headers=auth_headers,
+            timeout=config.REQUEST_TIMEOUT
+        )
+        res.raise_for_status()
         entries = res.json()
         if not entries:
-            print("[yellow]⚠️ No journal entries found.[/yellow]")
+            console.print("[yellow]⚠️ No journal entries found.[/yellow]")
+            return
         for entry in entries:
-            print(f"[bold cyan][{entry['id']}][/bold cyan] {entry['title']} - Tags: {entry['tags']}")
-            print(f"  [dim]Last updated: {entry.get('last_updated', 'N/A')}[/dim]")
-            print("  [dim]-- -- --[/dim]")
-    else:
-        print(f"[red]❌ Failed to list entries: {res.json()}[/red]")
-
+            console.print(
+                f"[bold cyan][{entry['id']}][/bold cyan] {entry['title']} - "
+                f"Tags: {', '.join(entry['tags'])}"
+            )
+            console.print(
+                f"  [dim]Last updated: {entry.get('last_updated', 'N/A')}[/dim]"
+            )
+            console.print("  [dim]-- -- --[/dim]")
+        logger.info("Listed journal entries")
+    except requests.HTTPError as e:
+        handle_error(res, e, "Failed to list entries")
 
 @entry_app.command("create")
 def create(
     title: str = typer.Argument(..., help="Title of the journal entry"),
     content: str = typer.Argument(..., help="Content of the journal entry"),
     tags: str = typer.Option("", "--tags", "-t", help="Comma-separated tags")
-):
-    """
-    Create a new journal entry.
-    """
-    token = auth.get_token()
-    if not token:
-        print("[red]❌ You must login first[/red]")
+) -> None:
+    """Create a new journal entry."""
+    auth_headers = auth.get_auth()
+    if not auth_headers:
+        console.print("[red]❌ Please login first.[/red]")
         raise typer.Exit()
-
     tag_list = [t.strip() for t in tags.split(",") if t.strip()]
-
-    res = requests.post(f"{config.API_URL}/entries/", json={
-        "title": title,
-        "content": content,
-        "tags": tag_list
-    }, headers={"Authorization": f"Bearer {token}"})
-
-    if res.status_code == 201:
-        print("[green]✅ Entry created successfully![/green]")
-    else:
-        print(f"[red]❌ Failed to create entry: {res.json()}[/red]")
-
+    try:
+        res = requests.post(
+            f"{config.API_URL}/journal_entries",
+            json={"title": title, "content": content, "tags": tag_list},
+            headers=auth_headers,
+            timeout=config.REQUEST_TIMEOUT
+        )
+        res.raise_for_status()
+        console.print("[green]✅ Entry created successfully![/green]")
+        logger.info(f"Created entry: {title}")
+    except requests.HTTPError as e:
+        handle_error(res, e, "Failed to create entry")
 
 @entry_app.command("delete")
-def delete(entry_id: int = typer.Argument(..., help="ID of the entry to delete")):
-    """
-    Delete a journal entry by ID.
-    """
-    token = auth.get_token()
-    if not token:
-        print("[red]❌ You must login first[/red]")
+def delete(entry_id: int = typer.Argument(..., help="ID of the entry to delete")) -> None:
+    """Delete a journal entry by ID."""
+    auth_headers = auth.get_auth()
+    if not auth_headers:
+        console.print("[red]❌ Please login first.[/red]")
         raise typer.Exit()
+    try:
+        res = requests.delete(
+            f"{config.API_URL}/journal_entries/{entry_id}",
+            headers=auth_headers,
+            timeout=config.REQUEST_TIMEOUT
+        )
+        res.raise_for_status()
+        console.print("[green]✅ Entry deleted successfully![/green]")
+        logger.info(f"Deleted entry ID {entry_id}")
+    except requests.HTTPError as e:
+        if res.status_code == 404:
+            console.print("[yellow]⚠️ Entry not found.[/yellow]")
+        else:
+            handle_error(res, e, "Failed to delete entry")
 
-    res = requests.delete(f"{config.API_URL}/entries/{entry_id}", headers={"Authorization": f"Bearer {token}"})
-    if res.status_code == 200:
-        print("[green]✅ Entry deleted successfully.[/green]")
-    elif res.status_code == 404:
-        print("[yellow]⚠️ Entry not found.[/yellow]")
-    else:
-        print(f"[red]❌ Failed to delete entry: {res.json()}[/red]")
+def handle_error(res: requests.Response, error: Exception, message: str) -> None:
+    """Handle HTTP request errors and display appropriate messages."""
+    try:
+        err = res.json()
+        console.print(f"[red]❌ {message}: {err.get('error', err.get('errors', 'Unknown error'))}[/red]")
+        logger.error(f"{message}: {err}")
+    except (requests.JSONDecodeError, ValueError):
+        console.print(f"[red]❌ Server error: {res.text}[/red]")
+        logger.error(f"{message}: {res.text}, {error}")
