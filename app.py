@@ -1,5 +1,4 @@
 # PWP_JournalAPI/app.py
-# PWP_JournalAPI/app.py
 import os
 import logging
 from flask import Flask

@@ -47,7 +47,7 @@ class UserHandler:
     def get_user(user_id: int) -> User:
         """Retrieve a user by ID."""
         try:
-            user = db.session.get(User.query_id)
+            user = db.session.get(User, user_id)
             logger.debug(f"Retrieved user {user_id}")
             return user
         except Exception as e:
