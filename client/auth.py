@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -21,7 +22,7 @@ def save_token(token: str) -> None:
     try:
         Path(TOKEN_FILE).parent.mkdir(parents=True, exist_ok=True)
         with open(TOKEN_FILE, "w", encoding="utf-8") as f:
-            json.dump({"token": token, "saved_at": os.time()}, f)
+            json.dump({"token": token, "saved_at": time.time()}, f)
         logger.info("Token saved successfully")
     except (OSError, json.JSONEncodeError) as e:
         logger.error("Failed to save token: %s", e)

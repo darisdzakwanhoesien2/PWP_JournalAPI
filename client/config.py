@@ -1,9 +1,9 @@
 # PWP_JournalAPI/client/config.py
 """Configuration settings for the Journal API CLI."""
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
-from pathlib import Path
 
 load_dotenv()
 
