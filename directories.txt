@@ -14,6 +14,7 @@ insert_from_files.py
 journalapi/__init__.py
 journalapi/api.py
 journalapi/cli.py
+journalapi/data.py
 journalapi/handlers/comment_handler.py
 journalapi/handlers/journal_entry_handler.py
 journalapi/handlers/user_handler.py
@@ -29,6 +30,7 @@ setup.py
 temp/data.py
 tests/__init__.py
 tests/conftest.py
+tests/data.py
 tests/test_cli_flow.py
 tests/test_comments.py
 tests/test_edit_history.py

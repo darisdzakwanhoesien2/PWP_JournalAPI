@@ -1,9 +1,8 @@
-# PWP_JournalAPI/journalapi/resources/edit_history.py
 """Edit history API resources for the Journal API."""
 from flask_restful import Resource
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from extensions import db
-from journalapi.models import EditHistory, JournalEntry
+from journalapi.handlers.journal_entry_handler import JournalEntryHandler
+from journalapi.models import EditHistory
 from journalapi.utils import json_response
 import logging
 
@@ -15,18 +14,11 @@ class EditHistoryResource(Resource):
 
     @jwt_required()
     def get(self, entry_id: int):
-        """Retrieve edit history for a journal entry.
-
-        Args:
-            entry_id (int): ID of the journal entry.
-
-        Returns:
-            JSON response with edit history or error message.
-        """
+        """Retrieve edit history for a journal entry."""
         try:
             user_id = int(get_jwt_identity())
-            entry = db.session.get(JournalEntry, entry_id)
-            if not entry or entry.user_id != user_id:
+            entry = JournalEntryHandler.get_entry(entry_id)
+            if not entry or entry["user_id"] != user_id:
                 logger.warning(f"Unauthorized access to entry {entry_id} by user {user_id}")
                 return json_response({"error": "Journal entry not found or unauthorized"}, 403)
             edits = EditHistory.query.filter_by(journal_entry_id=entry_id).all()

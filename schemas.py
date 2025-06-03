@@ -1,23 +1,24 @@
 """Marshmallow schemas for the Journal API."""
-from marshmallow import Schema, fields, validate
+from marshmallow import Schema, fields, validates, ValidationError
 
 class CommentSchema(Schema):
-    """Schema for validating comment data."""
-    content = fields.Str(required=True, validate=validate.Length(min=1))
+    content = fields.Str(required=True)
+
+    @validates("content")
+    def validate_content(self, value):
+        if len(value) < 1:
+            raise ValidationError("Shorter than minimum length 1.")
 
 class JournalEntrySchema(Schema):
-    """Schema for validating journal entry data."""
-    title = fields.Str(required=True, validate=validate.Length(min=1, max=100))
-    content = fields.Str(required=True, validate=validate.Length(min=1))
-    tags = fields.List(fields.Str(), missing=[])
+    title = fields.Str(required=True)
+    content = fields.Str(required=True)
+    tags = fields.List(fields.Str, required=False, missing=[])
 
 class UserRegisterSchema(Schema):
-    """Schema for validating user registration data."""
-    username = fields.Str(required=True, validate=validate.Length(min=3, max=80))
+    username = fields.Str(required=True)
     email = fields.Email(required=True)
-    password = fields.Str(required=True, validate=validate.Length(min=6), load_only=True)
+    password = fields.Str(required=True, validate=lambda s: len(s) >= 6)
 
 class UserLoginSchema(Schema):
-    """Schema for validating user login data."""
     email = fields.Email(required=True)
-    password = fields.Str(required=True, load_only=True)
+    password = fields.Str(required=True)

@@ -6,7 +6,6 @@ import os
 import time
 from pathlib import Path
 from typing import Optional
-
 from config import TOKEN_FILE
 
 # Configure logging

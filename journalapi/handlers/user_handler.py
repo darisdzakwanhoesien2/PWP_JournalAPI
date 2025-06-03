@@ -1,4 +1,3 @@
-# PWP_JournalAPI/journalapi/handlers/user_handler.py
 """Handler for user management operations."""
 from werkzeug.security import generate_password_hash, check_password_hash
 from extensions import db
@@ -13,13 +12,15 @@ class UserHandler:
 
     @staticmethod
     def register_user(username: str, email: str, password: str) -> User:
-        """Register a new user."""
         try:
             if User.query.filter_by(email=email).first():
                 logger.warning(f"Email {email} already registered")
                 return None
+            if User.query.filter_by(username=username).first():
+                logger.warning(f"Username {username} already registered")
+                return None
             hashed_password = generate_password_hash(password)
-            user = User(username=username, email=email, password_hash= hashed_password)
+            user = User(username=username, email=email, password_hash=hashed_password)
             db.session.add(user)
             db.session.commit()
             logger.info(f"User registered: {username}")
@@ -47,7 +48,7 @@ class UserHandler:
     def get_user(user_id: int) -> User:
         """Retrieve a user by ID."""
         try:
-            user = db.session.get(User, user_id)
+            user = db.session.get(User, user_id)  # Fixed typo: User.query_id -> User, user_id
             logger.debug(f"Retrieved user {user_id}")
             return user
         except Exception as e:

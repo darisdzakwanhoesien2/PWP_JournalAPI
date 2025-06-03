@@ -1,13 +1,9 @@
-# PWP_JournalAPI/journalapi/resources/journal_entry.py
 """Journal entry API resources for the Journal API."""
 from flask_restful import Resource
 from flask import request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from marshmallow import ValidationError
-import json
-from extensions import db
-from datetime import timezone
-from journalapi.models import JournalEntry
+from journalapi.handlers.journal_entry_handler import JournalEntryHandler
 from journalapi.utils import json_response
 from schemas import JournalEntrySchema
 import logging
@@ -25,9 +21,9 @@ class JournalEntryListResource(Resource):
         """Retrieve all journal entries for the authenticated user."""
         try:
             user_id = int(get_jwt_identity())
-            entries = JournalEntry.query.filter_by(user_id=user_id).all()
+            entries = JournalEntryHandler.get_entries(user_id)
             logger.info(f"Retrieved {len(entries)} entries for user {user_id}")
-            return json_response([e.to_dict() for e in entries], 200)
+            return json_response(entries, 200)
         except Exception as e:
             logger.error(f"Error retrieving entries: {e}")
             return json_response({"error": "Internal server error"}, 500)
@@ -38,24 +34,18 @@ class JournalEntryListResource(Resource):
         try:
             user_id = int(get_jwt_identity())
             data = entry_schema.load(request.get_json())
-            new_entry = JournalEntry(
+            entry = JournalEntryHandler.create_entry(
                 user_id=user_id,
                 title=data["title"],
                 content=data["content"],
-                tags=json.dumps(data.get("tags", [])),
-                sentiment_score=0.0,
-                sentiment_tag=json.dumps([]),
-                last_updated=datetime.now(timezone.utc)
+                tags=data.get("tags", [])
             )
-            db.session.add(new_entry)
-            db.session.commit()
-            logger.info(f"Created entry ID {new_entry.id} for user {user_id}")
-            return json_response({"id": new_entry.id, "_links": {"self": f"/api/entries/{new_entry.id}"}}, 201)
+            logger.info(f"Created entry ID {entry['id']} for user {user_id}")
+            return json_response({"id": entry["id"], "_links": {"self": f"/api/entries/{entry['id']}"}}, 201)
         except ValidationError as e:
             logger.error(f"Validation error: {e.messages}")
             return json_response({"error": e.messages}, 422)
         except Exception as e:
-            db.session.rollback()
             logger.error(f"Error creating entry: {e}")
             return json_response({"error": "Internal server error"}, 500)
 
@@ -67,12 +57,12 @@ class JournalEntryResource(Resource):
         """Retrieve a journal entry by ID."""
         try:
             user_id = int(get_jwt_identity())
-            entry = db.session.get(JournalEntry, entry_id)
-            if not entry or entry.user_id != user_id:
+            entry = JournalEntryHandler.get_entry(entry_id)
+            if not entry or entry["user_id"] != user_id:
                 logger.warning(f"Unauthorized access to entry {entry_id}")
                 return json_response({"error": "Not found or unauthorized"}, 403)
             logger.info(f"Retrieved entry {entry_id}")
-            return json_response(entry.to_dict(), 200)
+            return json_response(entry, 200)
         except Exception as e:
             logger.error(f"Error retrieving entry {entry_id}: {e}")
             return json_response({"error": "Internal server error"}, 500)
@@ -82,23 +72,22 @@ class JournalEntryResource(Resource):
         """Update a journal entry by ID."""
         try:
             user_id = int(get_jwt_identity())
-            entry = db.session.get(JournalEntry, entry_id)
-            if not entry or entry.user_id != user_id:
+            data = entry_schema.load(request.get_json())
+            entry = JournalEntryHandler.update_entry(
+                entry_id=entry_id,
+                title=data.get("title"),
+                content=data.get("content"),
+                tags=data.get("tags")
+            )
+            if not entry:
                 logger.warning(f"Unauthorized update to entry {entry_id}")
                 return json_response({"error": "Not found or unauthorized"}, 403)
-            data = entry_schema.load(request.get_json())
-            entry.title = data["title"]
-            entry.content = data["content"]
-            entry.tags = json.dumps(data["tags"])
-            entry.last_updated = datetime.now(timezone.utc)
-            db.session.commit()
             logger.info(f"Updated entry {entry_id}")
             return json_response({"message": "Entry updated", "_links": {"self": f"/api/entries/{entry_id}"}}, 200)
         except ValidationError as e:
             logger.error(f"Validation error: {e.messages}")
             return json_response({"error": e.messages}, 422)
         except Exception as e:
-            db.session.rollback()
             logger.error(f"Error updating entry {entry_id}: {e}")
             return json_response({"error": "Internal server error"}, 500)
 
@@ -107,15 +96,12 @@ class JournalEntryResource(Resource):
         """Delete a journal entry by ID."""
         try:
             user_id = int(get_jwt_identity())
-            entry = db.session.get(JournalEntry, entry_id)
-            if not entry or entry.user_id != user_id:
+            success = JournalEntryHandler.delete_entry(entry_id)
+            if not success:
                 logger.warning(f"Unauthorized delete for entry {entry_id}")
                 return json_response({"error": "Not found or unauthorized"}, 403)
-            db.session.delete(entry)
-            db.session.commit()
             logger.info(f"Deleted entry {entry_id}")
             return json_response({"message": "Entry deleted successfully"}, 200)
         except Exception as e:
-            db.session.rollback()
             logger.error(f"Error deleting entry {entry_id}: {e}")
             return json_response({"error": "Internal server error"}, 500)
