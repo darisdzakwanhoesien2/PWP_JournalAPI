@@ -1,7 +1,7 @@
-# PWP_JournalAPI/journalapi/utils.py
 """Utility functions for the Journal API."""
 import json
 from datetime import datetime, timedelta
+from flask import Response
 import jwt
 from werkzeug.security import check_password_hash
 from journalapi.models import User
@@ -14,9 +14,9 @@ def json_response(data, status_code=200):
         status_code (int): HTTP status code (default: 200).
     
     Returns:
-        tuple: Flask response tuple (json, status, headers).
+        flask.Response: Flask response object with JSON data.
     """
-    return json.dumps(data), status_code, {"Content-Type": "application/json"}
+    return Response(json.dumps(data), status=status_code, mimetype="application/json")
 
 def authenticate_user(username, password):
     """Authenticate a user with the given credentials.
@@ -29,7 +29,7 @@ def authenticate_user(username, password):
         User: The authenticated user object, or None if authentication fails.
     """
     user = User.query.filter_by(username=username).first()
-    if user and check_password_hash(user.password, password):
+    if user and check_password_hash(user.password_hash, password):
         return user
     return None
 
