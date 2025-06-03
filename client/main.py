@@ -4,9 +4,9 @@ import logging
 
 import typer
 
-from client.auth_cli import auth_app
-from client.entries_cli import entry_app
-from client.comments_cli import comment_app
+from auth_cli import auth_app
+from entries_cli import entry_app
+from comments_cli import comment_app
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)

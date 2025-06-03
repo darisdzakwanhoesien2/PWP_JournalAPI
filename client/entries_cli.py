@@ -6,8 +6,8 @@ import requests
 import typer
 from rich.console import Console
 
-from client import auth, config
-from client.utils import handle_error
+import auth, config
+from utils import handle_error
 
 console = Console()
 entry_app = typer.Typer(help="Manage journal entries in Journal API")
