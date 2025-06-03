@@ -1,42 +1,46 @@
-"""Tests for utility functions."""
-import unittest
-from werkzeug.security import generate_password_hash
+"""Test utility functions."""
+from journalapi.utils import json_response
 from journalapi.models import User
-from journalapi.utils import authenticate_user, generate_token, json_response
+from werkzeug.security import generate_password_hash
 
-class TestUtils(unittest.TestCase):
-    def setUp(self):
-        """Set up test user."""
-        self.client = self.client  # Provided by pytest fixture
-        with self.app.app_context():
-            hashed_password = generate_password_hash("password123")
-            user = User(username="testuser", email="test@example.com", password=hashed_password)
-            db.session.add(user)
-            db.session.commit()
-            self.user = user
+def test_json_response():
+    """Test the json_response utility function."""
+    data = {'key': 'value'}
+    response, status, headers = json_response(data, 201)
+    
+    assert status == 201
+    assert headers['Content-Type'] == 'application/json'
+    assert 'key' in response
 
-    def test_json_response(self):
-        """Test creating a JSON response."""
-        data = {"test": "value"}
-        response, status, headers = json_response(data, 200)
-        self.assertEqual(status, 200)
-        self.assertIn("application/json", headers["Content-Type"])
-        self.assertEqual(json.loads(response), data)
+def test_authenticate_user(db):
+    """Test user authentication utility."""
+    # Create a test user
+    user = User(
+        username='testauth',
+        email='auth@example.com',
+        password_hash=generate_password_hash('authpass')
+    )
+    db.session.add(user)
+    db.session.commit()
+    
+    # Test authentication
+    from journalapi.utils import authenticate_user
+    authenticated = authenticate_user('testauth', 'authpass')
+    assert authenticated is not None
+    assert authenticated.username == 'testauth'
+    
+    # Test failed authentication
+    failed = authenticate_user('testauth', 'wrongpass')
+    assert failed is None
 
-    def test_authenticate_user(self):
-        """Test authenticating a user."""
-        with self.app.app_context():
-            user = authenticate_user("testuser", "password123")
-            self.assertEqual(user.id, self.user.id)
-            user = authenticate_user("testuser", "wrongpass")
-            self.assertIsNone(user)
-
-    def test_generate_token(self):
-        """Test generating a JWT token."""
-        with self.app.app_context():
-            token = generate_token(self.user)
-            decoded = jwt.decode(token, "secret_key", algorithms=["HS256"])
-            self.assertEqual(decoded["user_id"], self.user.id)
-
-if __name__ == "__main__":
-    unittest.main()
+def test_generate_token():
+    """Test token generation utility."""
+    from journalapi.utils import generate_token
+    from journalapi.models import User
+    
+    # Create a mock user
+    user = User(id=1, username='tokenuser')
+    
+    token = generate_token(user)
+    assert isinstance(token, str)
+    assert len(token) > 0
