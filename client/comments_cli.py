@@ -6,9 +6,9 @@ import requests
 import typer
 from rich.console import Console
 
-from client import auth
-from client import config
-from client.utils import ensure_auth, handle_error
+import auth
+import config
+from utils import ensure_auth, handle_error
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
