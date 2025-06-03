@@ -1,17 +1,15 @@
 # PWP_JournalAPI/client/auth.py
-# client/auth.py
-
-# PWP_JournalAPI/client/auth.py
 """Client authentication utilities for the Journal API CLI."""
-import os
 import json
-from typing import Optional
-from pathlib import Path
-from client.config import TOKEN_FILE
 import logging
+import os
+from pathlib import Path
+from typing import Optional
+
+from client.config import TOKEN_FILE
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 def save_token(token: str) -> None:
@@ -25,8 +23,8 @@ def save_token(token: str) -> None:
         with open(TOKEN_FILE, "w", encoding="utf-8") as f:
             json.dump({"token": token, "saved_at": os.time()}, f)
         logger.info("Token saved successfully")
-    except (OSError, json.JSONDecodeError) as e:
-        logger.error(f"Failed to save token: {e}")
+    except (OSError, json.JSONEncodeError) as e:
+        logger.error("Failed to save token: %s", e)
         raise
 
 def get_token() -> Optional[str]:
@@ -43,7 +41,7 @@ def get_token() -> Optional[str]:
             data = json.load(f)
             return data.get("token")
     except (OSError, json.JSONDecodeError) as e:
-        logger.error(f"Failed to read token: {e}")
+        logger.error("Failed to read token: %s", e)
         return None
 
 def clear_token() -> None:
@@ -53,7 +51,7 @@ def clear_token() -> None:
             os.remove(TOKEN_FILE)
             logger.info("Token cleared successfully")
         except OSError as e:
-            logger.error(f"Failed to clear token: {e}")
+            logger.error("Failed to clear token: %s", e)
             raise
 
 def get_auth() -> dict:
