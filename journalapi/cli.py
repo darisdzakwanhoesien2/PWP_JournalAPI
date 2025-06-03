@@ -1,9 +1,9 @@
-# PWP_JournalAPI/journalapi/cli.py
 """Command-line interface commands for the Journal API."""
+import logging
+
 import click
 from flask.cli import with_appcontext
 from extensions import db
-import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -17,5 +17,5 @@ def init_db_command():
         click.echo("Initialized the database.")
         logger.info("Database initialized via CLI")
     except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
+        logger.error("Failed to initialize database: %s", e)
         raise

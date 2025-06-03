@@ -5,8 +5,6 @@ import logging
 import requests
 import typer
 from rich.console import Console
-
-import auth
 import config
 from utils import ensure_auth, handle_error
 

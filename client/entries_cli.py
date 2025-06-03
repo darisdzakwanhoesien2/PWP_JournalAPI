@@ -6,7 +6,8 @@ import requests
 import typer
 from rich.console import Console
 
-import auth, config
+import auth
+import config
 from utils import handle_error
 
 console = Console()

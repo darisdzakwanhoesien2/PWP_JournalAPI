@@ -1,10 +1,10 @@
-# PWP_JournalAPI/journalapi/models.py
 """Database models for the Journal API."""
 import json
+import logging
 from datetime import datetime, timezone
+
 from werkzeug.security import check_password_hash
 from extensions import db
-import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -16,13 +16,25 @@ class User(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
-    entries = db.relationship("JournalEntry", backref="user", lazy=True, cascade="all, delete-orphan")
-    comments = db.relationship("Comment", backref="user", lazy=True, cascade="all, delete-orphan")
+    entries = db.relationship(
+        "JournalEntry",
+        backref="user",
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
+    comments = db.relationship(
+        "Comment",
+        backref="user",
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
+        """Return a string representation of the User instance."""
         return f"<User {self.username}>"
 
     def to_dict(self):
+        """Convert User instance to a dictionary."""
         return {
             "id": self.id,
             "username": self.username,
@@ -34,6 +46,7 @@ class User(db.Model):
         }
 
     def check_password(self, password: str) -> bool:
+        """Check if the provided password matches the stored hash."""
         return check_password_hash(self.password_hash, password)
 
 class JournalEntry(db.Model):
@@ -47,13 +60,25 @@ class JournalEntry(db.Model):
     sentiment_score = db.Column(db.Float, nullable=True)
     sentiment_tag = db.Column(db.Text, nullable=True)
     last_updated = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    comments = db.relationship("Comment", backref="journal_entry", lazy=True, cascade="all, delete")
-    history = db.relationship("EditHistory", backref="journal_entry", lazy=True, cascade="all, delete")
+    comments = db.relationship(
+        "Comment",
+        backref="journal_entry",
+        lazy=True,
+        cascade="all, delete"
+    )
+    history = db.relationship(
+        "EditHistory",
+        backref="journal_entry",
+        lazy=True,
+        cascade="all, delete"
+    )
 
     def __repr__(self):
+        """Return a string representation of the JournalEntry instance."""
         return f"<JournalEntry {self.id}>"
 
     def to_dict(self):
+        """Convert JournalEntry instance to a dictionary."""
         return {
             "id": self.id,
             "user_id": self.user_id,
@@ -80,9 +105,11 @@ class Comment(db.Model):
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def __repr__(self):
+        """Return a string representation of the Comment instance."""
         return f"<Comment {self.id}>"
 
     def to_dict(self):
+        """Convert Comment instance to a dictionary."""
         return {
             "id": self.id,
             "journal_entry_id": self.journal_entry_id,
@@ -105,9 +132,11 @@ class EditHistory(db.Model):
     edited_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def __repr__(self):
+        """Return a string representation of the EditHistory instance."""
         return f"<EditHistory {self.id}>"
 
     def to_dict(self):
+        """Convert EditHistory instance to a dictionary."""
         return {
             "id": self.id,
             "journal_entry_id": self.journal_entry_id,

@@ -1,4 +1,3 @@
-# PWP_JournalAPI/journalapi/__init__.py
 """Initialize the Flask application for the Journal API."""
 import logging
 import os

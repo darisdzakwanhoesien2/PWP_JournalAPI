@@ -1,12 +1,12 @@
-# PWP_JournalAPI/journalapi/api.py
 """API blueprint and resource definitions for the Journal API."""
+import logging
+
 from flask import Blueprint
 from flask_restful import Api
 from journalapi.resources.user import UserRegisterResource, UserLoginResource, UserResource
 from journalapi.resources.journal_entry import JournalEntryListResource, JournalEntryResource
 from journalapi.resources.comment import CommentCollectionResource, CommentItemResource
 from journalapi.resources.edit_history import EditHistoryResource
-import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
