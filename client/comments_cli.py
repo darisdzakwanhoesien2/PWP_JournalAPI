@@ -25,8 +25,7 @@ def list(entry_id: int):
         for comment in comments:
             rprint(f"[blue]Comment ID: {comment['id']}[/blue]")
             rprint(f"Content: {comment['content']}")
-            rprint(f"Created: {comment['created_at']}")
-            rprint(f"Updated: {comment['updated_at']}")
+            rprint(f"Timestamp: {comment.get('timestamp', 'N/A')}")
             rprint("---")
     else:
         rprint(f"[red]❌ Error: {res.json()['error']}[/red]")
@@ -38,6 +37,11 @@ def add(entry_id: int, content: str):
     if not token:
         rprint("[red]❌ You must login first[/red]")
         raise typer.Exit()
+    
+    if not content.strip():
+        rprint("[red]❌ Validation Error: Content cannot be empty[/red]")
+        raise typer.Exit()
+    
     res = requests.post(
         f"{config.API_URL}/journal_entries/{entry_id}/comments",
         json={"content": content},
@@ -46,7 +50,13 @@ def add(entry_id: int, content: str):
     if res.status_code == 201:
         rprint("[green]✅ Comment added[/green]")
     else:
-        rprint(f"[red]❌ Error: {res.json()['error']}[/red]")
+        response_data = res.json()
+        if 'error' in response_data:
+            rprint(f"[red]❌ Error: {response_data['error']}[/red]")
+        elif 'errors' in response_data:
+            rprint(f"[red]❌ Validation Error: {response_data['errors']}[/red]")
+        else:
+            rprint(f"[red]❌ Error: {response_data}[/red]")
 
 @comment_app.command()
 def update(entry_id: int, comment_id: int, content: str):

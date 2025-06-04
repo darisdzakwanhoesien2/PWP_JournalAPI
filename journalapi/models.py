@@ -50,8 +50,8 @@ class JournalEntry(db.Model):
     sentiment_score = db.Column(db.Float, nullable=True)
     sentiment_tag = db.Column(db.Text, nullable=True)
     last_updated = db.Column(db.DateTime, nullable=True)
-    comments = db.relationship("Comment", backref="journal_entry", lazy=True)
-    history = db.relationship("EditHistory", backref="journal_entry", lazy=True)
+    comments = db.relationship("Comment", backref="journal_entry", lazy=True, cascade="all, delete-orphan")
+    history = db.relationship("EditHistory", backref="journal_entry", lazy=True, cascade="all, delete-orphan")
 
     def __repr__(self):
         """Return a string representation of the JournalEntry."""

@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from extensions import db
 from journalapi import api
 from journalapi.cli import init_db_command
+from journalapi.extensions import jwt
 
 load_dotenv()
 
@@ -39,7 +40,7 @@ def create_app(test_config: Optional[Dict[str, Any]] = None) -> Flask:
         pass
 
     db.init_app(app)
-    JWTManager(app)
+    jwt.init_app(app)
 
     app.register_blueprint(api.api_bp)
     app.cli.add_command(init_db_command)

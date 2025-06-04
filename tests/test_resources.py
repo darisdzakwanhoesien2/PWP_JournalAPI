@@ -56,8 +56,14 @@ def test_user_endpoints(client, auth_headers: dict, app, db_session):
         )
         db_session.session.add(other_user)
         db_session.session.commit()
+        other_token = client.post("/api/users/login", json={
+            "email": "other@example.com",
+            "password": "password123"
+        }).json["token"]
         response = client.get(f"/api/users/{other_user.id}", headers={"Authorization": f"Bearer {new_token}"})
         assert response.status_code == 403
+        response = client.get(f"/api/users/{other_user.id}", headers={"Authorization": f"Bearer {other_token}"})
+        assert response.status_code == 200
 
 def test_journal_entry_endpoints(client, auth_headers: dict, app, db_session):
     """Test journal entry endpoints."""
