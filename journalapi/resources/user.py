@@ -57,12 +57,12 @@ class UserResource(Resource):
         Returns:
             Response: JSON response with user data or error.
         """
-        current_user_id = int(get_jwt_identity())
-        if user_id != current_user_id:
-            return json_response({"error": "Unauthorized"}, 403)
         user = UserHandler.get_user(user_id)
         if not user:
             return json_response({"error": "User not found"}, 404)
+        current_user_id = int(get_jwt_identity())
+        if user_id != current_user_id:
+            return json_response({"error": "Unauthorized"}, 403)
         return json_response(user.to_dict(), 200)
 
     @jwt_required()
@@ -75,6 +75,9 @@ class UserResource(Resource):
         Returns:
             Response: JSON response with success message or error.
         """
+        user = UserHandler.get_user(user_id)
+        if not user:
+            return json_response({"error": "User not found"}, 404)
         current_user_id = int(get_jwt_identity())
         if user_id != current_user_id:
             return json_response({"error": "Unauthorized"}, 403)
@@ -102,6 +105,9 @@ class UserResource(Resource):
         Returns:
             Response: JSON response with success message or error.
         """
+        user = UserHandler.get_user(user_id)
+        if not user:
+            return json_response({"error": "User not found"}, 404)
         current_user_id = int(get_jwt_identity())
         if user_id != current_user_id:
             return json_response({"error": "Unauthorized"}, 403)

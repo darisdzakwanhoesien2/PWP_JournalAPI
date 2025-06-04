@@ -2,6 +2,7 @@
 import os
 import pytest
 import time
+import requests
 from typer.testing import CliRunner
 from unittest.mock import patch
 from client.main import app as cli_app
@@ -20,31 +21,52 @@ def test_cli_end_to_end(client, app, db_session, tmp_path, monkeypatch):
     runner = CliRunner()
     email = f"foo_{int(time.time())}@example.com"
     token_file = tmp_path / ".journal_token"
-    os.environ["TOKEN_FILE"] = str(token_file)
+    
+    # Set environment variable and patch the config
+    monkeypatch.setenv("TOKEN_FILE", str(token_file))
+    monkeypatch.setattr("client.config.TOKEN_FILE", str(token_file))
+    monkeypatch.setattr("client.auth.TOKEN_FILE", str(token_file))
 
     # Mock requests to use test client
-    def mock_requests(method, url, **kwargs):
-        class MockResponse:
-            def __init__(self, response):
-                self.status_code = response.status_code
-                self.json_data = response.json()
-            def json(self):
-                return self.json_data
+    class MockResponse:
+        def __init__(self, response):
+            self.status_code = response.status_code
+            self._json = response.get_json()
+            self.response = response
+        
+        def json(self):
+            return self._json
+        
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise requests.exceptions.HTTPError(response=self)
 
-        if method.lower() == "post":
-            response = client.post(url.replace("http://localhost:5000", ""), json=kwargs.get("json"), headers=kwargs.get("headers"))
-        elif method.lower() == "get":
-            response = client.get(url.replace("http://localhost:5000", ""), headers=kwargs.get("headers"))
-        elif method.lower() == "put":
-            response = client.put(url.replace("http://localhost:5000", ""), json=kwargs.get("json"), headers=kwargs.get("headers"))
-        elif method.lower() == "delete":
-            response = client.delete(url.replace("http://localhost:5000", ""), headers=kwargs.get("headers"))
+    def mock_post(url, **kwargs):
+        response = client.post(url.replace("http://localhost:5000", ""), 
+                             json=kwargs.get("json"), 
+                             headers=kwargs.get("headers"))
         return MockResponse(response)
 
-    with patch("requests.post", side_effect=mock_requests), \
-         patch("requests.get", side_effect=mock_requests), \
-         patch("requests.put", side_effect=mock_requests), \
-         patch("requests.delete", side_effect=mock_requests):
+    def mock_get(url, **kwargs):
+        response = client.get(url.replace("http://localhost:5000", ""), 
+                            headers=kwargs.get("headers"))
+        return MockResponse(response)
+
+    def mock_put(url, **kwargs):
+        response = client.put(url.replace("http://localhost:5000", ""), 
+                            json=kwargs.get("json"), 
+                            headers=kwargs.get("headers"))
+        return MockResponse(response)
+
+    def mock_delete(url, **kwargs):
+        response = client.delete(url.replace("http://localhost:5000", ""), 
+                              headers=kwargs.get("headers"))
+        return MockResponse(response)
+
+    with patch("requests.post", side_effect=mock_post), \
+         patch("requests.get", side_effect=mock_get), \
+         patch("requests.put", side_effect=mock_put), \
+         patch("requests.delete", side_effect=mock_delete):
 
         # Register
         result = runner.invoke(cli_app, [
@@ -64,7 +86,7 @@ def test_cli_end_to_end(client, app, db_session, tmp_path, monkeypatch):
             "--password", "testpass123"
         ])
         assert result.exit_code == 0
-        assert "Validation Error" in result.output
+        assert "Registration failed" in result.output
 
         # Login
         result = runner.invoke(cli_app, [

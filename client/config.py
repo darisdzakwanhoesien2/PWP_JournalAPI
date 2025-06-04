@@ -2,4 +2,4 @@
 import os
 
 API_URL = os.getenv("API_URL", "http://localhost:5000/api")
-TOKEN_FILE = os.path.expanduser("~/.journal_token")
+TOKEN_FILE = os.getenv("TOKEN_FILE", os.path.expanduser("~/.journal_token"))

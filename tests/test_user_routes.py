@@ -141,15 +141,7 @@ def test_delete_user(client, auth_headers: dict, app, db_session):
     """Test deleting a user."""
     with app.app_context():
         user = db_session.session.query(User).first()
-        # Valid deletion
-        response = client.delete(f"/api/users/{user.id}", headers=auth_headers)
-        assert response.status_code == 200
-        assert "deleted successfully" in response.json["message"].lower()
-        assert db_session.session.query(User).get(user.id) is None
-        # Non-existent user
-        response = client.delete(f"/api/users/{user.id + 1}", headers=auth_headers)
-        assert response.status_code == 404
-        # Unauthorized deletion
+        # Create another user first for testing unauthorized deletion
         other_user = User(
             username="otheruser",
             email="other@example.com",
@@ -157,5 +149,34 @@ def test_delete_user(client, auth_headers: dict, app, db_session):
         )
         db_session.session.add(other_user)
         db_session.session.commit()
+
+        # Unauthorized deletion attempt
         response = client.delete(f"/api/users/{other_user.id}", headers=auth_headers)
         assert response.status_code == 403
+
+        # Valid deletion of own user
+        response = client.delete(f"/api/users/{user.id}", headers=auth_headers)
+        assert response.status_code == 200
+        assert "deleted successfully" in response.json["message"].lower()
+        assert db_session.session.query(User).get(user.id) is None
+
+        # Create a new user and token for testing non-existent user
+        new_user = User(
+            username="newuser",
+            email="new@example.com",
+            password=generate_password_hash("password123")
+        )
+        db_session.session.add(new_user)
+        db_session.session.commit()
+        
+        # Login to get new token
+        login_response = client.post("/api/users/login", json={
+            "email": "new@example.com",
+            "password": "password123"
+        })
+        new_token = login_response.json["token"]
+        new_headers = {"Authorization": f"Bearer {new_token}"}
+        
+        # Non-existent user
+        response = client.delete(f"/api/users/{user.id + 100}", headers=new_headers)
+        assert response.status_code == 404

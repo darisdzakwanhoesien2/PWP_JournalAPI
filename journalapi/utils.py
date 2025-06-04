@@ -48,8 +48,5 @@ def generate_token(user: User) -> str:
     Returns:
         str: The generated JWT token.
     """
-    payload = {
-        "user_id": user.id,
-        "exp": datetime.utcnow() + timedelta(hours=24)
-    }
-    return jwt.encode(payload, os.getenv("JWT_SECRET_KEY", "secret_key"), algorithm="HS256")
+    from flask_jwt_extended import create_access_token
+    return create_access_token(identity=str(user.id))

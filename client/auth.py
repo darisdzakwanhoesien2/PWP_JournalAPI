@@ -33,13 +33,17 @@ def get_token() -> Optional[str]:
         print(f"[red]❌ Failed to read token: {e}[/red]")
         return None
 
-def clear_token() -> None:
+def remove_token() -> None:
     """Delete the stored JWT token to log out the user."""
     if os.path.exists(TOKEN_FILE):
         try:
             os.remove(TOKEN_FILE)
         except OSError as e:
             print(f"[red]❌ Failed to clear token: {e}[/red]")
+
+def clear_token() -> None:
+    """Delete the stored JWT token to log out the user."""
+    remove_token()
 
 def get_auth() -> Dict[str, str]:
     """Return the authorization header if token exists.

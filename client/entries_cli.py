@@ -50,6 +50,10 @@ def create(
     if not token:
         rprint("[red]❌ You must login first[/red]")
         raise typer.Exit()
+    
+    if not title.strip():
+        rprint("[red]❌ Title cannot be empty[/red]")
+        raise typer.Exit(code=1)
     tag_list = [t.strip() for t in tags.split(",") if t.strip()]
     res = requests.post(
         f"{config.API_URL}/journal_entries",
