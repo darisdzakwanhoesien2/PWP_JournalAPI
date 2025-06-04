@@ -1,0 +1,468 @@
+# auth.py
+# PWP_JournalAPI/client/auth.py
+"""Client authentication utilities for the Journal API CLI."""
+import json
+import logging
+import os
+import time
+from pathlib import Path
+from typing import Optional
+from .config import TOKEN_FILE
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
+def save_token(token: str) -> None:
+    """Save JWT token to a file for authenticated requests.
+
+    Args:
+        token: The JWT token to save.
+    """
+    try:
+        Path(TOKEN_FILE).parent.mkdir(parents=True, exist_ok=True)
+        with open(TOKEN_FILE, "w", encoding="utf-8") as f:
+            json.dump({"token": token, "saved_at": time.time()}, f)
+        logger.info("Token saved successfully")
+    except (OSError, json.JSONEncodeError) as e:
+        logger.error("Failed to save token: %s", e)
+        raise
+
+def get_token() -> Optional[str]:
+    """Retrieve the saved JWT token from file.
+
+    Returns:
+        The token string or None if not found or invalid.
+    """
+    if not os.path.exists(TOKEN_FILE):
+        logger.debug("Token file not found")
+        return None
+    try:
+        with open(TOKEN_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data.get("token")
+    except (OSError, json.JSONDecodeError) as e:
+        logger.error("Failed to read token: %s", e)
+        return None
+
+def clear_token() -> None:
+    """Delete the stored JWT token to log out the user."""
+    if os.path.exists(TOKEN_FILE):
+        try:
+            os.remove(TOKEN_FILE)
+            logger.info("Token cleared successfully")
+        except OSError as e:
+            logger.error("Failed to clear token: %s", e)
+            raise
+
+def get_auth() -> dict:
+    """Return the authorization header if token exists.
+
+    Returns:
+        dict: Authorization header with bearer token or empty dict.
+    """
+    token = get_token()
+    if token:
+        logger.debug("Authorization header generated")
+        return {"Authorization": f"Bearer {token}"}
+    logger.debug("No token found, returning empty auth header")
+    return {}
+
+# auth_cli.py
+# PWP_JournalAPI/client/auth_cli.py
+"""CLI commands for authentication in the Journal API."""
+import logging
+
+import requests
+import typer
+from rich.console import Console
+import auth
+import config
+from utils import handle_error
+
+console = Console()
+auth_app = typer.Typer(help="Authentication commands for Journal API")
+logger = logging.getLogger(__name__)
+
+@auth_app.command("register")
+def register(
+    username: str = typer.Option(..., "--username", "-u", help="Desired username"),
+    email: str = typer.Option(..., "--email", "-e", help="Email address"),
+    password: str = typer.Option(
+        ..., "--password", "-p", hide_input=True, help="Password"
+    ),
+) -> None:
+    """Register a new user with username, email, and password."""
+    try:
+        res = requests.post(
+            f"{config.API_URL}/users/register",
+            json={"username": username, "email": email, "password": password},
+            timeout=config.REQUEST_TIMEOUT,
+        )
+        res.raise_for_status()
+        console.print("[green]✅ Registered successfully![/green]")
+        logger.info("User registered: %s", username)
+    except requests.HTTPError as e:
+        handle_error(res, e, "Registration failed")
+
+@auth_app.command("login")
+def login(
+    email: str = typer.Option(..., "--email", "-e", help="Email address"),
+    password: str = typer.Option(
+        ..., "--password", "-p", hide_input=True, help="Password"
+    ),
+) -> None:
+    """Log in and store the JWT token."""
+    try:
+        res = requests.post(
+            f"{config.API_URL}/users/login",
+            json={"email": email, "password": password},
+            timeout=config.REQUEST_TIMEOUT,
+        )
+        res.raise_for_status()
+        auth.save_token(res.json()["token"])
+        console.print("[green]✅ Logged in successfully![/green]")
+        logger.info("User logged in: %s", email)
+    except requests.HTTPError as e:
+        handle_error(res, e, "Login failed")
+
+@auth_app.command("logout")
+def logout() -> None:
+    """Remove saved token (logout)."""
+    auth.clear_token()
+    console.print("[yellow]🔓 Logged out successfully![/yellow]")
+    logger.info("User logged out")
+
+@auth_app.command("me")
+def me() -> None:
+    """Check if you're logged in."""
+    token = auth.get_token()
+    if token:
+        console.print("[green]🔐 Logged in[/green]")
+        logger.debug("Checked login status: logged in")
+    else:
+        console.print("[red]🔓 Not logged in[/red]")
+        logger.debug("Checked login status: not logged in")
+
+# comments_cli.py
+# PWP_JournalAPI/client/comments_cli.py
+"""CLI commands for managing comments in the Journal API."""
+import logging
+
+import requests
+import typer
+from rich.console import Console
+import config
+from utils import ensure_auth, handle_error
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+console = Console()
+comment_app = typer.Typer(help="Manage comments in Journal API")
+logger = logging.getLogger(__name__)
+
+@comment_app.command("list")
+def list_comments(entry_id: int) -> None:
+    """List all comments for a journal entry.
+
+    Args:
+        entry_id: ID of the journal entry.
+    """
+    auth_headers = ensure_auth()
+    try:
+        res = requests.get(
+            f"{config.API_URL}/journal_entries/{entry_id}/comments",
+            headers=auth_headers,
+            timeout=config.REQUEST_TIMEOUT,
+        )
+        res.raise_for_status()
+        comments = res.json()
+        if not comments:
+            console.print("[yellow]⚠️ No comments found.[/yellow]")
+            return
+        for c in comments:
+            console.print(
+                f"[bold cyan][{c['id']}][/bold cyan] {c['content']} "
+                f"(by user {c['user_id']})"
+            )
+        logger.info("Listed comments for entry ID %s", entry_id)
+    except requests.HTTPError as e:
+        handle_error(res, e, "Failed to list comments")
+
+@comment_app.command("add")
+def add_comment(
+    entry_id: int,
+    content: str = typer.Argument(..., help="Comment content"),
+) -> None:
+    """Add a comment to a journal entry.
+
+    Args:
+        entry_id: ID of the journal entry.
+        content: Content of the comment.
+    """
+    auth_headers = ensure_auth()
+    try:
+        res = requests.post(
+            f"{config.API_URL}/journal_entries/{entry_id}/comments",
+            json={"content": content},
+            headers=auth_headers,
+            timeout=config.REQUEST_TIMEOUT,
+        )
+        res.raise_for_status()
+        console.print("[green]✅ Comment added successfully![/green]")
+        logger.info("Added comment to entry ID %s", entry_id)
+    except requests.HTTPError as e:
+        handle_error(res, e, "Failed to add comment")
+
+@comment_app.command("delete")
+def delete_comment(entry_id: int, comment_id: int) -> None:
+    """Delete a comment from a journal entry.
+
+    Args:
+        entry_id: ID of the journal entry.
+        comment_id: ID of the comment to delete.
+    """
+    auth_headers = ensure_auth()
+    try:
+        res = requests.delete(
+            f"{config.API_URL}/journal_entries/{entry_id}/comments/{comment_id}",
+            headers=auth_headers,
+            timeout=config.REQUEST_TIMEOUT,
+        )
+        res.raise_for_status()
+        console.print("[green]✅ Comment deleted successfully![/green]")
+        logger.info("Deleted comment ID %s from entry ID %s", comment_id, entry_id)
+    except requests.HTTPError as e:
+        handle_error(res, e, "Failed to delete comment")
+
+# config.py
+# PWP_JournalAPI/client/config.py
+"""Configuration settings for the Journal API CLI."""
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+API_URL = os.getenv("API_URL", "http://localhost:5000/api")
+TOKEN_FILE = os.path.expanduser("~/.journal_token")
+REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "5"))
+
+# data.py
+from pathlib import Path
+import json
+
+def extract_content_from_ipynb(file_path: Path) -> str:
+    """
+    Extracts and concatenates the content of a Jupyter Notebook (.ipynb) file.
+    Both code cells and markdown cells are extracted, preserving the order.
+    Each cell is annotated with a header indicating its type.
+    """
+    try:
+        notebook = json.loads(file_path.read_text(encoding="utf-8"))
+        cells = notebook.get("cells", [])
+        content_lines = []
+        for idx, cell in enumerate(cells, start=1):
+            cell_type = cell.get("cell_type", "unknown")
+            # Add a header for this cell
+            if cell_type == "code":
+                content_lines.append(f"### Cell {idx}: Code")
+            elif cell_type == "markdown":
+                content_lines.append(f"### Cell {idx}: Markdown")
+            else:
+                content_lines.append(f"### Cell {idx}: {cell_type}")
+            # Join the source lines; they are typically stored as a list of lines.
+            source = "".join(cell.get("source", []))
+            content_lines.append(source)
+            content_lines.append("\n")  # Extra newline after each cell
+        return "\n".join(content_lines)
+    except Exception as e:
+        return f"# Error reading {file_path}: {e}"
+
+def export_code_and_directory_list(root_directory=".", code_file="code.txt", list_file="directories.txt"):
+    """
+    Traverses the given root directory to find all files with a .py or .ipynb extension.
+    Writes to two files:
+      - directories.txt: A list of the file paths.
+      - code.txt: Each file’s path (as header) followed by its content.
+        For .ipynb files, both code and markdown cells are included.
+    """
+    root = Path(root_directory)
+    # Collect both .py and .ipynb files
+    files = list(root.rglob("*.py")) + list(root.rglob("*.ipynb"))
+    # Optional: sort files for a consistent order
+    files.sort(key=lambda p: p.as_posix())
+
+    with open(code_file, "w", encoding="utf-8") as code_out, open(list_file, "w", encoding="utf-8") as list_out:
+        for file_path in files:
+            # Write the file path to the directories file
+            list_out.write(f"{file_path}\n")
+            
+            # Write the file path header in the code file
+            code_out.write(f"# {file_path}\n")
+            
+            # Process the file according to its extension
+            if file_path.suffix == ".ipynb":
+                content = extract_content_from_ipynb(file_path)
+            else:
+                try:
+                    content = file_path.read_text(encoding="utf-8")
+                except Exception as e:
+                    content = f"# Error reading {file_path}: {e}"
+            
+            code_out.write(content)
+            code_out.write("\n\n")  # Add separation for readability
+
+if __name__ == "__main__":
+    # Adjust 'root_directory' if your repository root is different.
+    export_code_and_directory_list(root_directory=".", code_file="code.txt", list_file="directories.txt")
+
+
+# entries_cli.py
+# PWP_JournalAPI/client/entries_cli.py
+"""CLI commands for managing journal entries in the Journal API."""
+import logging
+
+import requests
+import typer
+from rich.console import Console
+
+import auth
+import config
+from utils import handle_error
+
+console = Console()
+entry_app = typer.Typer(help="Manage journal entries in Journal API")
+logger = logging.getLogger(__name__)
+
+@entry_app.command("list")
+def list_entries() -> None:
+    """List all your journal entries."""
+    auth_headers = auth.get_auth()
+    if not auth_headers:
+        console.print("[red]❌ Please login first.[/red]")
+        raise typer.Exit()
+    try:
+        res = requests.get(
+            f"{config.API_URL}/entries",
+            headers=auth_headers,
+            timeout=config.REQUEST_TIMEOUT,
+        )
+        res.raise_for_status()
+        entries = res.json()
+        if not entries:
+            console.print("[yellow]⚠️ No journal entries found.[/yellow]")
+            return
+        for entry in entries:
+            console.print(
+                f"[bold cyan][{entry['id']}][/bold cyan] {entry['title']} - "
+                f"Tags: {', '.join(entry['tags'])}"
+            )
+            console.print(
+                f"  [dim]Last updated: {entry.get('last_updated', 'N/A')}[/dim]"
+            )
+            console.print("  [dim]-- -- --[/dim]")
+        logger.info("Listed journal entries")
+    except requests.HTTPError as e:
+        handle_error(res, e, "Failed to list entries")
+
+@entry_app.command("create")
+def create(
+    title: str = typer.Argument(..., help="Title of the journal entry"),
+    content: str = typer.Argument(..., help="Content of the journal entry"),
+    tags: str = typer.Option("", "--tags", "-t", help="Comma-separated tags"),
+) -> None:
+    """Create a new journal entry."""
+    auth_headers = auth.get_auth()
+    if not auth_headers:
+        console.print("[red]❌ Please login first.[/red]")
+        raise typer.Exit()
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+    try:
+        res = requests.post(
+            f"{config.API_URL}/entries",
+            json={"title": title, "content": content, "tags": tag_list},
+            headers=auth_headers,
+            timeout=config.REQUEST_TIMEOUT,
+        )
+        res.raise_for_status()
+        console.print("[green]✅ Entry created successfully![/green]")
+        logger.info("Created entry: %s", title)
+    except requests.HTTPError as e:
+        handle_error(res, e, "Failed to create entry")
+
+@entry_app.command("delete")
+def delete(entry_id: int = typer.Argument(..., help="ID of the entry to delete")) -> None:
+    """Delete a journal entry by ID."""
+    auth_headers = auth.get_auth()
+    if not auth_headers:
+        console.print("[red]❌ Please login first.[/red]")
+        raise typer.Exit()
+    try:
+        res = requests.delete(
+            f"{config.API_URL}/entries/{entry_id}",
+            headers=auth_headers,
+            timeout=config.REQUEST_TIMEOUT,
+        )
+        res.raise_for_status()
+        console.print("[green]✅ Entry deleted successfully![/green]")
+        logger.info("Deleted entry ID %s", entry_id)
+    except requests.HTTPError as e:
+        if res.status_code == 404:
+            console.print("[yellow]⚠️ Entry not found.[/yellow]")
+        else:
+            handle_error(res, e, "Failed to delete entry")
+
+# main.py
+# PWP_JournalAPI/client/main.py
+"""Main CLI application for the Journal API."""
+import logging
+
+import typer
+
+from auth_cli import auth_app
+from entries_cli import entry_app
+from comments_cli import comment_app
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
+app = typer.Typer(help="PWP Journal API CLI - Manage your journal entries")
+app.add_typer(auth_app, name="auth", help="Manage user authentication")
+app.add_typer(entry_app, name="entry", help="Manage journal entries")
+app.add_typer(comment_app, name="comment", help="Manage comments")
+
+if __name__ == "__main__":
+    logger.info("Starting Journal API CLI")
+    app()
+
+# utils.py
+# PWP_JournalAPI/client/utils.py
+"""Utility functions for the Journal API CLI."""
+import logging
+
+import requests
+from rich.console import Console
+
+console = Console()
+logger = logging.getLogger(__name__)
+
+def handle_error(res: requests.Response, error: Exception, message: str) -> None:
+    """Handle HTTP request errors and display appropriate messages.
+
+    Args:
+        res: The HTTP response object.
+        error: The exception raised.
+        message: The error message to display.
+    """
+    try:
+        err = res.json()
+        console.print(
+            f"[red]❌ {message}: {err.get('error', err.get('errors', 'Unknown error'))}[/red]"
+        )
+        logger.error("%s: %s", message, err)
+    except (requests.JSONDecodeError, ValueError):
+        console.print(f"[red]❌ Server error: {res.text}[/red]")
+        logger.error("%s: %s, %s", message, res.text, error)
+

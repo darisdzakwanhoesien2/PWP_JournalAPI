@@ -1,0 +1,2859 @@
+# conftest.py
+import pytest
+import os
+import tempfile
+from journalapi import create_app
+from extensions import db as _db
+import json
+
+@pytest.fixture
+def app():
+    """Create and configure a new app instance for each test."""
+    db_fd, db_path = tempfile.mkstemp()
+    app = create_app({
+        'TESTING': True,
+        'SQLALCHEMY_DATABASE_URI': f'sqlite:///{db_path}',
+        'SQLALCHEMY_TRACK_MODIFICATIONS': False,
+        'JWT_SECRET_KEY': 'test-secret-key'
+    })
+
+    with app.app_context():
+        _db.create_all()
+
+    yield app
+
+    os.close(db_fd)
+    os.unlink(db_path)
+
+@pytest.fixture
+def client(app):
+    """A test client for the app."""
+    return app.test_client()
+
+@pytest.fixture
+def db(app):
+    """Database fixture."""
+    with app.app_context():
+        yield _db
+        _db.session.remove()
+        _db.drop_all()
+
+@pytest.fixture
+def auth_headers(client):
+    """Fixture to get authentication headers."""
+    response = client.post('/api/users/register', json={
+        'username': 'testuser',
+        'email': 'test@example.com',
+        'password': 'testpass123'
+    })
+    assert response.status_code == 201, f"Registration failed: {response.get_data(as_text=True)}"
+    
+    response = client.post('/api/users/login', json={
+        'email': 'test@example.com',
+        'password': 'testpass123'
+    })
+    assert response.status_code == 200, f"Login failed: {response.get_data(as_text=True)}"
+    
+    response_data = response.get_json()
+    token = response_data['token']
+    
+    return {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }
+
+# data.py
+from pathlib import Path
+import json
+
+def extract_content_from_ipynb(file_path: Path) -> str:
+    """
+    Extracts and concatenates the content of a Jupyter Notebook (.ipynb) file.
+    Both code cells and markdown cells are extracted, preserving the order.
+    Each cell is annotated with a header indicating its type.
+    """
+    try:
+        notebook = json.loads(file_path.read_text(encoding="utf-8"))
+        cells = notebook.get("cells", [])
+        content_lines = []
+        for idx, cell in enumerate(cells, start=1):
+            cell_type = cell.get("cell_type", "unknown")
+            # Add a header for this cell
+            if cell_type == "code":
+                content_lines.append(f"### Cell {idx}: Code")
+            elif cell_type == "markdown":
+                content_lines.append(f"### Cell {idx}: Markdown")
+            else:
+                content_lines.append(f"### Cell {idx}: {cell_type}")
+            # Join the source lines; they are typically stored as a list of lines.
+            source = "".join(cell.get("source", []))
+            content_lines.append(source)
+            content_lines.append("\n")  # Extra newline after each cell
+        return "\n".join(content_lines)
+    except Exception as e:
+        return f"# Error reading {file_path}: {e}"
+
+def export_code_and_directory_list(root_directory=".", code_file="code.txt", list_file="directories.txt"):
+    """
+    Traverses the given root directory to find all files with a .py or .ipynb extension.
+    Writes to two files:
+      - directories.txt: A list of the file paths.
+      - code.txt: Each file’s path (as header) followed by its content.
+        For .ipynb files, both code and markdown cells are included.
+    """
+    root = Path(root_directory)
+    # Collect both .py and .ipynb files
+    files = list(root.rglob("*.py")) + list(root.rglob("*.ipynb"))
+    # Optional: sort files for a consistent order
+    files.sort(key=lambda p: p.as_posix())
+
+    with open(code_file, "w", encoding="utf-8") as code_out, open(list_file, "w", encoding="utf-8") as list_out:
+        for file_path in files:
+            # Write the file path to the directories file
+            list_out.write(f"{file_path}\n")
+            
+            # Write the file path header in the code file
+            code_out.write(f"# {file_path}\n")
+            
+            # Process the file according to its extension
+            if file_path.suffix == ".ipynb":
+                content = extract_content_from_ipynb(file_path)
+            else:
+                try:
+                    content = file_path.read_text(encoding="utf-8")
+                except Exception as e:
+                    content = f"# Error reading {file_path}: {e}"
+            
+            code_out.write(content)
+            code_out.write("\n\n")  # Add separation for readability
+
+if __name__ == "__main__":
+    # Adjust 'root_directory' if your repository root is different.
+    export_code_and_directory_list(root_directory=".", code_file="code.txt", list_file="directories.txt")
+
+
+# test_auth.py
+import json
+import os
+from pathlib import Path
+from unittest.mock import mock_open
+
+import pytest
+from pytest_mock import MockerFixture
+from client import auth
+
+@pytest.fixture
+def mock_token_file(mocker: MockerFixture):
+    """Fixture to mock token file path."""
+    mocker.patch("client.auth.TOKEN_FILE", "/tmp/.journal_token")
+    return "/tmp/.journal_token"
+
+def test_save_token_success(mocker: MockerFixture, mock_token_file: str, caplog):
+    """Test saving token successfully."""
+    caplog.set_level("INFO")
+    mock_path = mocker.patch("pathlib.Path")
+    mock_path.return_value.parent.mkdir.side_effect = None
+    mock_file = mock_open()
+    mocker.patch("builtins.open", mock_file)
+
+    auth.save_token("test_token")
+
+    mock_path.assert_called_once_with(mock_token_file)
+    mock_path.return_value.parent.mkdir.assert_called_once_with(parents=True, exist_ok=True)
+    mock_file.assert_called_once_with(mock_token_file, "w", encoding="utf-8")
+    mock_file().write.assert_called_once()
+    assert "Token saved successfully" in caplog.text
+
+def test_save_token_oserror(mocker: MockerFixture, mock_token_file: str, caplog):
+    """Test save_token with OSError."""
+    caplog.set_level("ERROR")
+    mocker.patch("pathlib.Path").return_value.parent.mkdir.side_effect = OSError("Permission denied")
+    with pytest.raises(OSError, match="Permission denied"):
+        auth.save_token("test_token")
+    assert "Failed to save token: Permission denied" in caplog.text
+
+def test_save_token_json_error(mocker: MockerFixture, mock_token_file: str, caplog):
+    """Test save_token with JSON encode error."""
+    caplog.set_level("ERROR")
+    mocker.patch("pathlib.Path").return_value.parent.mkdir.side_effect = None
+    mocker.patch("json.dump", side_effect=json.JSONEncodeError("Invalid JSON", "", 0))
+    with pytest.raises(json.JSONEncodeError):
+        auth.save_token("test_token")
+    assert "Failed to save token: Invalid JSON" in caplog.text
+
+def test_get_token_success(mocker: MockerFixture, mock_token_file: str, caplog):
+    """Test retrieving token successfully."""
+    caplog.set_level("DEBUG")
+    mocker.patch("os.path.exists", return_value=True)
+    mock_file = mock_open(read_data='{"token": "test_token"}')
+    mocker.patch("builtins.open", mock_file)
+
+    token = auth.get_token()
+
+    assert token == "test_token"
+    mock_file.assert_called_once_with(mock_token_file, "r", encoding="utf-8")
+    assert "Token file not found" not in caplog.text
+
+def test_get_token_file_not_found(mocker: MockerFixture, mock_token_file: str, caplog):
+    """Test get_token when token file doesn't exist."""
+    caplog.set_level("DEBUG")
+    mocker.patch("os.path.exists", return_value=False)
+
+    token = auth.get_token()
+
+    assert token is None
+    assert "Token file not found" in caplog.text
+
+def test_get_token_json_error(mocker: MockerFixture, mock_token_file: str, caplog):
+    """Test get_token with JSON decode error."""
+    caplog.set_level("ERROR")
+    mocker.patch("os.path.exists", return_value=True)
+    mocker.patch("builtins.open", mock_open(read_data="invalid json"))
+    mocker.patch("json.load", side_effect=json.JSONDecodeError("Invalid JSON", "", 0))
+
+    token = auth.get_token()
+
+    assert token is None
+    assert "Failed to read token: Invalid JSON" in caplog.text
+
+def test_get_token_oserror(mocker: MockerFixture, mock_token_file: str, caplog):
+    """Test get_token with OSError."""
+    caplog.set_level("ERROR")
+    mocker.patch("os.path.exists", return_value=True)
+    mocker.patch("builtins.open", side_effect=OSError("File error"))
+
+    token = auth.get_token()
+
+    assert token is None
+    assert "Failed to read token: File error" in caplog.text
+
+def test_clear_token_success(mocker: MockerFixture, mock_token_file: str, caplog):
+    """Test clearing token successfully."""
+    caplog.set_level("INFO")
+    mocker.patch("os.path.exists", return_value=True)
+    mocker.patch("os.remove")
+
+    auth.clear_token()
+
+    mocker.patch("os.remove").assert_called_once_with(mock_token_file)
+    assert "Token cleared successfully" in caplog.text
+
+def test_clear_token_no_file(mocker: MockerFixture, mock_token_file: str, caplog):
+    """Test clear_token when token file doesn't exist."""
+    caplog.set_level("INFO")
+    mocker.patch("os.path.exists", return_value=False)
+
+    auth.clear_token()
+
+    mocker.patch("os.remove").assert_not_called()
+    assert "Token cleared successfully" not in caplog.text
+
+def test_clear_token_oserror(mocker: MockerFixture, mock_token_file: str, caplog):
+    """Test clear_token with OSError."""
+    caplog.set_level("ERROR")
+    mocker.patch("os.path.exists", return_value=True)
+    mocker.patch("os.remove", side_effect=OSError("Permission denied"))
+
+    with pytest.raises(OSError, match="Permission denied"):
+        auth.clear_token()
+    assert "Failed to clear token: Permission denied" in caplog.text
+
+def test_get_auth_with_token(mocker: MockerFixture, caplog):
+    """Test get_auth with a valid token."""
+    caplog.set_level("DEBUG")
+    mocker.patch("client.auth.get_token", return_value="test_token")
+
+    headers = auth.get_auth()
+
+    assert headers == {"Authorization": "Bearer test_token"}
+    assert "Authorization header generated" in caplog.text
+
+def test_get_auth_no_token(mocker: MockerFixture, caplog):
+    """Test get_auth when no token exists."""
+    caplog.set_level("DEBUG")
+    mocker.patch("client.auth.get_token", return_value=None)
+
+    headers = auth.get_auth()
+
+    assert headers == {}
+    assert "No token found, returning empty auth header" in caplog.text
+
+# test_auth_cli.py
+from unittest.mock import Mock
+import pytest
+import requests
+import requests_mock
+from pytest_mock import MockerFixture
+from typer.testing import CliRunner
+from client import auth_cli, auth
+
+runner = CliRunner()
+
+@pytest.fixture
+def mock_config(mocker: MockerFixture):
+    """Mock config settings."""
+    mocker.patch("client.config.API_URL", "http://test-api")
+    mocker.patch("client.config.REQUEST_TIMEOUT", 5)
+
+def test_register_success(mocker: MockerFixture, mock_config, caplog):
+    """Test register command success."""
+    caplog.set_level("INFO")
+    with requests_mock.Mocker() as m:
+        m.post("http://test-api/users/register", json={"message": "User registered"}, status_code=200)
+        mocker.patch("client.auth_cli.console.print")
+        result = runner.invoke(
+            auth_cli.auth_app,
+            ["register", "--username", "testuser", "--email", "test@example.com", "--password", "pass123"],
+        )
+    assert result.exit_code == 0
+    assert "✅ Registered successfully!" in auth_cli.console.print.call_args[0][0]
+    assert "User registered: testuser" in caplog.text
+
+def test_register_http_error(mocker: MockerFixture, mock_config, caplog):
+    """Test register command with HTTP error."""
+    caplog.set_level("ERROR")
+    with requests_mock.Mocker() as m:
+        m.post("http://test-api/users/register", json={"error": "User exists"}, status_code=400)
+        mocker.patch("client.utils.handle_error")
+        mocker.patch("client.auth_cli.console.print")
+        result = runner.invoke(
+            auth_cli.auth_app,
+            ["register", "--username", "testuser", "--email", "test@example.com", "--password", "pass123"],
+        )
+    assert result.exit_code == 0
+    auth_cli.utils.handle_error.assert_called_once()
+    assert auth_cli.utils.handle_error.call_args[0][2] == "Registration failed"
+    assert "❌ Registration failed: User exists" in auth_cli.console.print.call_args[0][0]
+
+def test_login_success(mocker: MockerFixture, mock_config, caplog):
+    """Test login command success."""
+    caplog.set_level("INFO")
+    with requests_mock.Mocker() as m:
+        m.post("http://test-api/users/login", json={"token": "test_token"}, status_code=200)
+        mocker.patch("client.auth.save_token")
+        mocker.patch("client.auth_cli.console.print")
+        result = runner.invoke(
+            auth_cli.auth_app,
+            ["login", "--email", "test@example.com", "--password", "pass123"],
+        )
+    assert result.exit_code == 0
+    auth.save_token.assert_called_once_with("test_token")
+    assert "✅ Logged in successfully!" in auth_cli.console.print.call_args[0][0]
+    assert "User logged in: test@example.com" in caplog.text
+
+def test_login_http_error(mocker: MockerFixture, mock_config, caplog):
+    """Test login command with HTTP error."""
+    caplog.set_level("ERROR")
+    with requests_mock.Mocker() as m:
+        m.post("http://test-api/users/login", json={"error": "Invalid credentials"}, status_code=401)
+        mocker.patch("client.utils.handle_error")
+        mocker.patch("client.auth_cli.console.print")
+        result = runner.invoke(
+            auth_cli.auth_app,
+            ["login", "--email", "test@example.com", "--password", "wrongpass"],
+        )
+    assert result.exit_code == 0
+    auth_cli.utils.handle_error.assert_called_once()
+    assert auth_cli.utils.handle_error.call_args[0][2] == "Login failed"
+    assert "❌ Login failed: Invalid credentials" in auth_cli.console.print.call_args[0][0]
+
+def test_logout(mocker: MockerFixture, caplog):
+    """Test logout command."""
+    caplog.set_level("INFO")
+    mocker.patch("client.auth.clear_token")
+    mocker.patch("client.auth_cli.console.print")
+    result = runner.invoke(auth_cli.auth_app, ["logout"])
+    assert result.exit_code == 0
+    auth.clear_token.assert_called_once()
+    assert "🔓 Logged out successfully!" in auth_cli.console.print.call_args[0][0]
+    assert "User logged out" in caplog.text
+
+def test_me_logged_in(mocker: MockerFixture, caplog):
+    """Test me command when logged in."""
+    caplog.set_level("DEBUG")
+    mocker.patch("client.auth.get_token", return_value="test_token")
+    mocker.patch("client.auth_cli.console.print")
+    result = runner.invoke(auth_cli.auth_app, ["me"])
+    assert result.exit_code == 0
+    assert "🔐 Logged in" in auth_cli.console.print.call_args[0][0]
+    assert "Checked login status: logged in" in caplog.text
+
+def test_me_not_logged_in(mocker: MockerFixture, caplog):
+    """Test me command when not logged in."""
+    caplog.set_level("DEBUG")
+    mocker.patch("client.auth.get_token", return_value=None)
+    mocker.patch("client.auth_cli.console.print")
+    result = runner.invoke(auth_cli.auth_app, ["me"])
+    assert result.exit_code == 0
+    assert "🔓 Not logged in" in auth_cli.console.print.call_args[0][0]
+    assert "Checked login status: not logged in" in caplog.text
+
+# test_comments.py
+import json
+import pytest
+from journalapi.models import JournalEntry, Comment
+from extensions import db
+
+def test_add_comment(client, auth_headers):
+    """Test adding a comment to a journal entry."""
+    entry_resp = client.post('/api/entries', json={
+        'title': 'Test Entry',
+        'content': 'Test content',
+        'tags': ['test']
+    }, headers=auth_headers)
+    entry_id = entry_resp.get_json()['id']
+    
+    comment_data = {'content': 'Test comment'}
+    response = client.post(
+        f'/api/entries/{entry_id}/comments',
+        json=comment_data,
+        headers=auth_headers
+    )
+    
+    assert response.status_code == 201
+    assert 'id' in response.get_json()
+    
+    get_response = client.get(
+        f'/api/entries/{entry_id}/comments',
+        headers=auth_headers
+    )
+    assert get_response.status_code == 200
+    comments = get_response.get_json()
+    assert len(comments) == 1
+    assert comments[0]['content'] == 'Test comment'
+
+def test_add_comment_invalid_entry(client, auth_headers):
+    """Test adding a comment to a non-existent journal entry."""
+    response = client.post(
+        '/api/entries/999/comments',
+        json={'content': 'Test comment'},
+        headers=auth_headers
+    )
+    
+    assert response.status_code == 404
+    assert 'Entry not found' in response.get_json()['error']
+
+def test_add_comment_invalid_data(client, auth_headers, app):
+    """Test adding a comment with invalid data."""
+    with app.app_context():
+        user_id = 1
+        entry = JournalEntry(user_id=user_id, title='Test Entry', content='Test content', tags='[]')
+        db.session.add(entry)
+        db.session.commit()
+        entry_id = entry.id
+    
+    response = client.post(
+        f'/api/entries/{entry_id}/comments',
+        json={'content': ''},
+        headers=auth_headers
+    )
+    
+    assert response.status_code == 422
+    assert 'content' in response.get_json()['error']
+
+def test_get_comments_invalid_entry(client, auth_headers):
+    """Test retrieving comments for a non-existent journal entry."""
+    response = client.get(
+        '/api/entries/999/comments',
+        headers=auth_headers
+    )
+    
+    assert response.status_code == 404
+    assert 'Entry not found' in response.get_json()['error']
+
+def test_get_single_comment_not_found(client, auth_headers):
+    """Test retrieving a non-existent comment."""
+    entry_resp = client.post('/api/entries', json={
+        'title': 'Test Entry',
+        'content': 'Test content'
+    }, headers=auth_headers)
+    entry_id = entry_resp.get_json()['id']
+    
+    response = client.get(
+        f'/api/entries/{entry_id}/comments/999',
+        headers=auth_headers
+    )
+    
+    assert response.status_code == 404
+    assert 'Not found' in response.get_json()['error']
+
+def test_get_single_comment_wrong_entry(client, auth_headers):
+    """Test retrieving a comment with mismatched entry_id."""
+    entry_resp = client.post('/api/entries', json={
+        'title': 'Test Entry',
+        'content': 'Test content'
+    }, headers=auth_headers)
+    entry_id = entry_resp.get_json()['id']
+    
+    entry_resp2 = client.post('/api/entries', json={
+        'title': 'Another Entry',
+        'content': 'Another content'
+    }, headers=auth_headers)
+    entry_id2 = entry_resp2.get_json()['id']
+    
+    comment_resp = client.post(
+        f'/api/entries/{entry_id2}/comments',
+        json={'content': 'Test comment'},
+        headers=auth_headers
+    )
+    comment_id = comment_resp.get_json()['id']
+    
+    response = client.get(
+        f'/api/entries/{entry_id}/comments/{comment_id}',
+        headers=auth_headers
+    )
+    
+    assert response.status_code == 404
+    assert 'Not found' in response.get_json()['error']
+
+def test_update_comment(client, auth_headers):
+    """Test updating a comment."""
+    entry_resp = client.post('/api/entries', json={
+        'title': 'Test Entry',
+        'content': 'Test content'
+    }, headers=auth_headers)
+    entry_id = entry_resp.get_json()['id']
+    
+    comment_resp = client.post(
+        f'/api/entries/{entry_id}/comments',
+        json={'content': 'Original comment'},
+        headers=auth_headers
+    )
+    comment_id = comment_resp.get_json()['id']
+    
+    update_resp = client.put(
+        f'/api/entries/{entry_id}/comments/{comment_id}',
+        json={'content': 'Updated comment'},
+        headers=auth_headers
+    )
+    
+    assert update_resp.status_code == 200
+    
+    get_resp = client.get(
+        f'/api/entries/{entry_id}/comments/{comment_id}',
+        headers=auth_headers
+    )
+    assert get_resp.get_json()['content'] == 'Updated comment'
+
+def test_update_comment_unauthorized(client, auth_headers, app):
+    """Test updating a comment not owned by the user."""
+    entry_resp = client.post('/api/entries', json={
+        'title': 'Test Entry',
+        'content': 'Test content'
+    }, headers=auth_headers)
+    entry_id = entry_resp.get_json()['id']
+    
+    comment_resp = client.post(
+        f'/api/entries/{entry_id}/comments',
+        json={'content': 'Original comment'},
+        headers=auth_headers
+    )
+    comment_id = comment_resp.get_json()['id']
+    
+    client.post('/api/users/register', json={
+        'username': 'otheruser',
+        'email': 'other@example.com',
+        'password': 'otherpass'
+    })
+    login_resp = client.post('/api/users/login', json={
+        'email': 'other@example.com',
+        'password': 'otherpass'
+    })
+    other_token = login_resp.get_json()['token']
+    other_headers = {
+        'Authorization': f'Bearer {other_token}',
+        'Content-Type': 'application/json'
+    }
+    
+    response = client.put(
+        f'/api/entries/{entry_id}/comments/{comment_id}',
+        json={'content': 'Unauthorized update'},
+        headers=other_headers
+    )
+    
+    assert response.status_code == 403
+    assert 'Not found or unauthorized' in response.get_json()['error']
+
+def test_update_comment_invalid_data(client, auth_headers):
+    """Test updating a comment with invalid data."""
+    entry_resp = client.post('/api/entries', json={
+        'title': 'Test Entry',
+        'content': 'Test content'
+    }, headers=auth_headers)
+    entry_id = entry_resp.get_json()['id']
+    
+    comment_resp = client.post(
+        f'/api/entries/{entry_id}/comments',
+        json={'content': 'Original comment'},
+        headers=auth_headers
+    )
+    comment_id = comment_resp.get_json()['id']
+    
+    response = client.put(
+        f'/api/entries/{entry_id}/comments/{comment_id}',
+        json={'content': ''},
+        headers=auth_headers
+    )
+    
+    assert response.status_code == 422
+    assert 'content' in response.get_json()['error']
+
+def test_delete_comment(client, auth_headers):
+    """Test deleting a comment."""
+    entry_resp = client.post('/api/entries', json={
+        'title': 'Test Entry',
+        'content': 'Test content'
+    }, headers=auth_headers)
+    entry_id = entry_resp.get_json()['id']
+    
+    comment_resp = client.post(
+        f'/api/entries/{entry_id}/comments',
+        json={'content': 'To be deleted'},
+        headers=auth_headers
+    )
+    comment_id = comment_resp.get_json()['id']
+    
+    delete_resp = client.delete(
+        f'/api/entries/{entry_id}/comments/{comment_id}',
+        headers=auth_headers
+    )
+    
+    assert delete_resp.status_code == 200
+    
+    get_resp = client.get(
+        f'/api/entries/{entry_id}/comments',
+        headers=auth_headers
+    )
+    assert len(get_resp.get_json()) == 0
+
+def test_delete_comment_unauthorized(client, auth_headers):
+    """Test deleting a comment not owned by the user."""
+    entry_resp = client.post('/api/entries', json={
+        'title': 'Test Entry',
+        'content': 'Test content'
+    }, headers=auth_headers)
+    entry_id = entry_resp.get_json()['id']
+    
+    comment_resp = client.post(
+        f'/api/entries/{entry_id}/comments',
+        json={'content': 'To be deleted'},
+        headers=auth_headers
+    )
+    comment_id = comment_resp.get_json()['id']
+    
+    client.post('/api/users/register', json={
+        'username': 'otheruser',
+        'email': 'other@example.com',
+        'password': 'otherpass'
+    })
+    login_resp = client.post('/api/users/login', json={
+        'email': 'other@example.com',
+        'password': 'otherpass'
+    })
+    other_token = login_resp.get_json()['token']
+    other_headers = {
+        'Authorization': f'Bearer {other_token}',
+        'Content-Type': 'application/json'
+    }
+    
+    response = client.delete(
+        f'/api/entries/{entry_id}/comments/{comment_id}',
+        headers=other_headers
+    )
+    
+    assert response.status_code == 403
+    assert 'Not found or unauthorized' in response.get_json()['error']
+
+# test_comments_cli.py
+import pytest
+import requests
+import requests_mock
+from pytest_mock import MockerFixture
+from typer.testing import CliRunner
+from client import comments_cli, auth
+
+runner = CliRunner()
+
+@pytest.fixture
+def mock_config(mocker: MockerFixture):
+    """Mock config settings."""
+    mocker.patch("client.config.API_URL", "http://test-api")
+    mocker.patch("client.config.REQUEST_TIMEOUT", 5)
+
+def test_list_comments_success(mocker: MockerFixture, mock_config, caplog):
+    """Test list_comments command success."""
+    caplog.set_level("INFO")
+    mocker.patch("client.comments_cli.ensure_auth", return_value={"Authorization": "Bearer test_token"})
+    with requests_mock.Mocker() as m:
+        m.get(
+            "http://test-api/journal_entries/1/comments",
+            json=[{"id": 1, "content": "Great!", "user_id": 1}],
+            status_code=200,
+        )
+        mocker.patch("client.comments_cli.console.print")
+        result = runner.invoke(comments_cli.comment_app, ["list", "1"])
+    assert result.exit_code == 0
+    assert "[1] Great! (by user 1)" in comments_cli.console.print.call_args[0][0]
+    assert "Listed comments for entry ID 1" in caplog.text
+
+def test_list_comments_empty(mocker: MockerFixture, mock_config, caplog):
+    """Test list_comments when no comments exist."""
+    caplog.set_level("INFO")
+    mocker.patch("client.comments_cli.ensure_auth", return_value={"Authorization": "Bearer test_token"})
+    with requests_mock.Mocker() as m:
+        m.get("http://test-api/journal_entries/1/comments", json=[], status_code=200)
+        mocker.patch("client.comments_cli.console.print")
+        result = runner.invoke(comments_cli.comment_app, ["list", "1"])
+    assert result.exit_code == 0
+    assert "⚠️ No comments found." in comments_cli.console.print.call_args[0][0]
+    assert "Listed comments for entry ID 1" in caplog.text
+
+def test_list_comments_http_error(mocker: MockerFixture, mock_config, caplog):
+    """Test list_comments with HTTP error."""
+    caplog.set_level("ERROR")
+    mocker.patch("client.comments_cli.ensure_auth", return_value={"Authorization": "Bearer test_token"})
+    with requests_mock.Mocker() as m:
+        m.get("http://test-api/journal_entries/1/comments", json={"error": "Not found"}, status_code=404)
+        mocker.patch("client.utils.handle_error")
+        result = runner.invoke(comments_cli.comment_app, ["list", "1"])
+    assert result.exit_code == 0
+    comments_cli.utils.handle_error.assert_called_once()
+    assert comments_cli.utils.handle_error.call_args[0][2] == "Failed to list comments"
+
+def test_add_comment_success(mocker: MockerFixture, mock_config, caplog):
+    """Test add_comment command success."""
+    caplog.set_level("INFO")
+    mocker.patch("client.comments_cli.ensure_auth", return_value={"Authorization": "Bearer test_token"})
+    with requests_mock.Mocker() as m:
+        m.post("http://test-api/journal_entries/1/comments", json={}, status_code=201)
+        mocker.patch("client.comments_cli.console.print")
+        result = runner.invoke(comments_cli.comment_app, ["add", "1", "Great post!"])
+    assert result.exit_code == 0
+    assert "✅ Comment added successfully!" in comments_cli.console.print.call_args[0][0]
+    assert "Added comment to entry ID 1" in caplog.text
+
+def test_add_comment_http_error(mocker: MockerFixture, mock_config, caplog):
+    """Test add_comment with HTTP error."""
+    caplog.set_level("ERROR")
+    mocker.patch("client.comments_cli.ensure_auth", return_value={"Authorization": "Bearer test_token"})
+    with requests_mock.Mocker() as m:
+        m.post("http://test-api/journal_entries/1/comments", json={"error": "Unauthorized"}, status_code=401)
+        mocker.patch("client.utils.handle_error")
+        result = runner.invoke(comments_cli.comment_app, ["add", "1", "Great post!"])
+    assert result.exit_code == 0
+    comments_cli.utils.handle_error.assert_called_once()
+    assert comments_cli.utils.handle_error.call_args[0][2] == "Failed to add comment"
+
+def test_delete_comment_success(mocker: MockerFixture, mock_config, caplog):
+    """Test delete_comment command success."""
+    caplog.set_level("INFO")
+    mocker.patch("client.comments_cli.ensure_auth", return_value={"Authorization": "Bearer test_token"})
+    with requests_mock.Mocker() as m:
+        m.delete("http://test-api/journal_entries/1/comments/1", json={}, status_code=200)
+        mocker.patch("client.comments_cli.console.print")
+        result = runner.invoke(comments_cli.comment_app, ["delete", "1", "1"])
+    assert result.exit_code == 0
+    assert "✅ Comment deleted successfully!" in comments_cli.console.print.call_args[0][0]
+    assert "Deleted comment ID 1 from entry ID 1" in caplog.text
+
+def test_delete_comment_http_error(mocker: MockerFixture, mock_config, caplog):
+    """Test delete_comment with HTTP error."""
+    caplog.set_level("ERROR")
+    mocker.patch("client.comments_cli.ensure_auth", return_value={"Authorization": "Bearer test_token"})
+    with requests_mock.Mocker() as m:
+        m.delete("http://test-api/journal_entries/1/comments/1", json={"error": "Not found"}, status_code=404)
+        mocker.patch("client.utils.handle_error")
+        result = runner.invoke(comments_cli.comment_app, ["delete", "1", "1"])
+    assert result.exit_code == 0
+    comments_cli.utils.handle_error.assert_called_once()
+    assert comments_cli.utils.handle_error.call_args[0][2] == "Failed to delete comment"
+
+# test_comments_handler.py
+import pytest
+from unittest.mock import patch, MagicMock
+from journalapi.handlers.comment_handler import CommentHandler
+from journalapi.models import Comment
+from extensions import db
+import logging
+
+class TestCommentHandler:
+    """Test cases for CommentHandler."""
+
+    def test_add_comment_success(self):
+        """Test successful comment addition."""
+        with patch('extensions.db.session.add'), patch('extensions.db.session.commit'):
+            result = CommentHandler.add_comment(1, 1, "Test comment")
+            assert isinstance(result, dict)
+            assert 'content' in result
+
+    def test_add_comment_failure(self):
+        """Test comment addition failure."""
+        with patch('extensions.db.session.add', side_effect=Exception("DB error")), \
+             patch('extensions.db.session.rollback') as mock_rollback:
+            with pytest.raises(Exception):
+                CommentHandler.add_comment(1, 1, "Test comment")
+            mock_rollback.assert_called_once()
+
+    def test_get_comments_success(self):
+        """Test successful comment retrieval."""
+        mock_comments = [MagicMock(to_dict=lambda: {"content": "test"})]
+        with patch('journalapi.models.Comment.query') as mock_query:
+            mock_query.filter_by.return_value.all.return_value = mock_comments
+            result = CommentHandler.get_comments(1)
+            assert len(result) == 1
+            assert result[0]['content'] == "test"
+
+    def test_get_comments_failure(self):
+        """Test comment retrieval failure."""
+        with patch('journalapi.models.Comment.query') as mock_query:
+            mock_query.filter_by.side_effect = Exception("DB error")
+            with pytest.raises(Exception):
+                CommentHandler.get_comments(1)
+
+    def test_update_comment_success(self):
+        """Test successful comment update."""
+        mock_comment = MagicMock(user_id=1, content="old")
+        with patch('extensions.db.session.get', return_value=mock_comment), \
+             patch('extensions.db.session.commit'):
+            result = CommentHandler.update_comment(1, 1, "new")
+            assert mock_comment.content == "new"
+            assert result['content'] == "old"  # assuming to_dict returns old state
+
+    def test_update_comment_not_found(self):
+        """Test update when comment not found."""
+        with patch('extensions.db.session.get', return_value=None):
+            result = CommentHandler.update_comment(1, 1, "new")
+            assert result is None
+
+    def test_update_comment_unauthorized(self):
+        """Test unauthorized comment update."""
+        mock_comment = MagicMock(user_id=2)  # different user
+        with patch('extensions.db.session.get', return_value=mock_comment):
+            result = CommentHandler.update_comment(1, 1, "new")
+            assert result is None
+
+    def test_update_comment_failure(self):
+        """Test comment update failure."""
+        mock_comment = MagicMock(user_id=1)
+        with patch('extensions.db.session.get', return_value=mock_comment), \
+             patch('extensions.db.session.commit', side_effect=Exception("DB error")), \
+             patch('extensions.db.session.rollback') as mock_rollback:
+            with pytest.raises(Exception):
+                CommentHandler.update_comment(1, 1, "new")
+            mock_rollback.assert_called_once()
+
+    def test_delete_comment_success(self):
+        """Test successful comment deletion."""
+        mock_comment = MagicMock(user_id=1)
+        with patch('extensions.db.session.get', return_value=mock_comment), \
+             patch('extensions.db.session.delete'), \
+             patch('extensions.db.session.commit'):
+            result = CommentHandler.delete_comment(1, 1)
+            assert result is True
+
+    def test_delete_comment_not_found(self):
+        """Test delete when comment not found."""
+        with patch('extensions.db.session.get', return_value=None):
+            result = CommentHandler.delete_comment(1, 1)
+            assert result is False
+
+    def test_delete_comment_unauthorized(self):
+        """Test unauthorized comment deletion."""
+        mock_comment = MagicMock(user_id=2)  # different user
+        with patch('extensions.db.session.get', return_value=mock_comment):
+            result = CommentHandler.delete_comment(1, 1)
+            assert result is False
+
+    def test_delete_comment_failure(self):
+        """Test comment deletion failure."""
+        mock_comment = MagicMock(user_id=1)
+        with patch('extensions.db.session.get', return_value=mock_comment), \
+             patch('extensions.db.session.delete'), \
+             patch('extensions.db.session.commit', side_effect=Exception("DB error")), \
+             patch('extensions.db.session.rollback') as mock_rollback:
+            with pytest.raises(Exception):
+                CommentHandler.delete_comment(1, 1)
+            mock_rollback.assert_called_once()
+
+# test_config.py
+import unittest
+from unittest.mock import patch
+import os
+from client import config
+
+class TestConfig(unittest.TestCase):
+    @patch.dict("os.environ", {"API_URL": "http://test-api:8000", "REQUEST_TIMEOUT": "10"})
+    def test_config_with_env_vars(self):
+        with patch("client.config.load_dotenv"):
+            import client.config
+            self.assertEqual(config.API_URL, "http://test-api:8000")
+            self.assertEqual(config.REQUEST_TIMEOUT, 10)
+            self.assertEqual(config.TOKEN_FILE, os.path.expanduser("~/.journal_token"))
+
+    @patch.dict("os.environ", {})
+    def test_config_default_values(self):
+        with patch("client.config.load_dotenv"):
+            import client.config
+            self.assertEqual(config.API_URL, "http://localhost:5000/api")
+            self.assertEqual(config.REQUEST_TIMEOUT, 5)
+            self.assertEqual(config.TOKEN_FILE, os.path.expanduser("~/.journal_token"))
+
+if __name__ == "__main__":
+    unittest.main()
+
+# test_data.py
+import json
+from pathlib import Path
+import pytest
+from pytest_mock import MockerFixture
+from client import data
+
+def test_extract_content_from_ipynb_success(mocker: MockerFixture):
+    """Test extract_content_from_ipynb with valid notebook."""
+    mock_file = mocker.mock_open(read_data=json.dumps({
+        "cells": [
+            {"cell_type": "markdown", "source": ["# Title\n", "Text"]},
+            {"cell_type": "code", "source": ["print('Hello')"]},
+            {"cell_type": "unknown", "source": ["Other"]}
+        ]
+    }))
+    mocker.patch("pathlib.Path.read_text", mock_file)
+
+    content = data.extract_content_from_ipynb(Path("test.ipynb"))
+
+    expected = (
+        "### Cell 1: Markdown\n"
+        "# Title\nText\n\n"
+        "### Cell 2: Code\n"
+        "print('Hello')\n\n"
+        "### Cell 3: unknown\n"
+        "Other\n\n"
+    )
+    assert content == expected
+
+def test_extract_content_from_ipynb_empty(mocker: MockerFixture):
+    """Test extract_content_from_ipynb with empty notebook."""
+    mock_file = mocker.mock_open(read_data=json.dumps({"cells": []}))
+    mocker.patch("pathlib.Path.read_text", mock_file)
+
+    content = data.extract_content_from_ipynb(Path("test.ipynb"))
+
+    assert content == ""
+
+def test_extract_content_from_ipynb_error(mocker: MockerFixture):
+    """Test extract_content_from_ipynb with invalid JSON."""
+    mocker.patch("pathlib.Path.read_text", side_effect=Exception("File error"))
+
+    content = data.extract_content_from_ipynb(Path("test.ipynb"))
+
+    assert content == "# Error reading test.ipynb: File error"
+
+def test_export_code_and_directory_list_success(mocker: MockerFixture, tmp_path):
+    """Test export_code_and_directory_list with .py and .ipynb files."""
+    py_file = tmp_path / "test.py"
+    py_file.write_text("print('Hello')", encoding="utf-8")
+    ipynb_file = tmp_path / "test.ipynb"
+    ipynb_file.write_text(json.dumps({
+        "cells": [{"cell_type": "code", "source": ["print('World')"]}]
+    }), encoding="utf-8")
+
+    mocker.patch("pathlib.Path.rglob", return_value=[py_file, ipynb_file])
+    mock_code = mocker.mock_open()
+    mock_list = mocker.mock_open()
+    mocker.patch("builtins.open", side_effect=[mock_code(), mock_list()])
+
+    data.export_code_and_directory_list(root_directory=tmp_path, code_file="code.txt", list_file="dirs.txt")
+
+    list_calls = mock_list().write.call_args_list
+    assert str(py_file) in list_calls[0][0][0]
+    assert str(ipynb_file) in list_calls[1][0][0]
+
+    code_calls = mock_code().write.call_args_list
+    assert f"# {py_file}" in code_calls[0][0][0]
+    assert "print('Hello')" in code_calls[1][0][0]
+    assert f"# {ipynb_file}" in code_calls[3][0][0]
+    assert "### Cell 1: Code\nprint('World')" in code_calls[4][0][0]
+
+def test_export_code_and_directory_list_error(mocker: MockerFixture, tmp_path):
+    """Test export_code_and_directory_list with file read error."""
+    py_file = tmp_path / "test.py"
+    mocker.patch("pathlib.Path.rglob", return_value=[py_file])
+    mocker.patch("pathlib.Path.read_text", side_effect=Exception("Read error"))
+    mock_code = mocker.mock_open()
+    mock_list = mocker.mock_open()
+    mocker.patch("builtins.open", side_effect=[mock_code(), mock_list()])
+
+    data.export_code_and_directory_list(root_directory_path=tmp_path, code_file="code.txt", list_file="dirs.txt")
+
+    code_calls = mock_code().write.call_args_list
+    assert f"# {py_file}" in code_calls[0][0]
+    assert "# Error reading" in code_calls[1][0][0]
+
+# test_edit_history.py
+import json
+
+def test_get_edit_history(client, auth_headers):
+    """Test retrieving edit history for a journal entry."""
+    entry_resp = client.post('/api/entries', json={
+        'title': 'Test Entry',
+        'content': 'Initial content',
+        'tags': ['test']
+    }, headers=auth_headers)
+    entry_id = entry_resp.get_json()['id']
+    
+    client.put(f'/api/entries/{entry_id}', json={
+        'title': 'Updated Entry',
+        'content': 'Updated content',
+        'tags': ['updated']
+    }, headers=auth_headers)
+    
+    history_resp = client.get(
+        f'/api/entries/{entry_id}/history',
+        headers=auth_headers
+    )
+    
+    assert history_resp.status_code == 200
+    history = history_resp.get_json()
+    assert len(history) == 1
+    assert history[0]['old_content'] == 'Initial content'
+    assert history[0]['new_content'] == 'Updated content'
+
+def test_get_edit_history_unauthorized(client, auth_headers):
+    """Test retrieving edit history for a journal entry not owned by the user."""
+    entry_resp = client.post('/api/entries', json={
+        'title': 'Test Entry',
+        'content': 'Initial content',
+        'tags': ['test']
+    }, headers=auth_headers)
+    entry_id = entry_resp.get_json()['id']
+    
+    client.post('/api/users/register', json={
+        'username': 'otheruser',
+        'email': 'other@example.com',
+        'password': 'otherpass123'
+    })
+    login_resp = client.post('/api/users/login', json={
+        'email': 'other@example.com',
+        'password': 'otherpass123'
+    })
+    other_token = login_resp.get_json()['token']
+    other_headers = {
+        'Authorization': f'Bearer {other_token}',
+        'Content-Type': 'application/json'
+    }
+    
+    history_resp = client.get(
+        f'/api/entries/{entry_id}/history',
+        headers=other_headers
+    )
+    
+    assert history_resp.status_code == 403
+    assert 'Journal entry not found or unauthorized' in history_resp.get_json()['error']
+
+# test_entries_cli.py
+import pytest
+import requests
+import requests_mock
+from pytest_mock import MockerFixture
+from typer.testing import CliRunner
+from client import entries, auth
+import client.entries_cli
+import client.utils
+
+runner = CliRunner()
+
+@pytest.fixture
+def mock_config(mocker: MockerFixture):
+    """Mock config settings."""
+    mocker.patch("client.config.API_URL", "http://test-api")
+    mocker.patch("client.config.REQUEST_TIMEOUT", 5)
+
+def test_list_entries_success(mocker: MockerFixture, mock_config, caplog):
+    """Test list_entries command success."""
+    caplog.set_level("INFO")
+    mocker.patch("client.auth.get_auth", return_value={"Authorization": "Bearer test_token"})
+    with requests_mock.Mocker() as m:
+        m.get(
+            "http://test-api/entries",
+            json=[
+                {"id": 1, "title": "Test Entry", "tags": ["tag1"], "last_updated": "2023-01-01T00:00:00"},
+                {"id": 2, "title": "Another Entry", "tags": ["tag2"], "last_updated": "2023-01-02T00:00:00"}
+            ],
+            status_code=200,
+        )
+        console_mock = mocker.patch("client.entries_cli.console.print")
+        result = runner.invoke(entries.entry_app, ["list"])
+    
+    assert result.exit_code == 0
+    print_calls = [call[0][0] for call in console_mock.call_args_list]
+    assert any("[1] Test Entry - Tags: tag1" in call for call in print_calls)
+    assert any("[2] Another Entry - Tags: tag2" in call for call in print_calls)
+    assert "Listed journal entries" in caplog.text
+    assert m.last_request.headers["Authorization"] == "Bearer test_token"
+    assert m.last_request.timeout == 5
+
+def test_list_entries_empty(mocker: MockerFixture, mock_config, caplog):
+    """Test list_entries when no entries exist."""
+    caplog.set_level("INFO")
+    mocker.patch("client.auth.get_auth", return_value={"Authorization": "Bearer test_token"})
+    with requests_mock.Mocker() as m:
+        m.get("http://test-api/entries", json=[], status_code=200)
+        console_mock = mocker.patch("client.entries_cli.console.print")
+        result = runner.invoke(entries.entry_app, ["list"])
+    
+    assert result.exit_code == 0
+    assert "⚠️ No journal entries found." in console_mock.call_args[0][0]
+    assert "Listed journal entries" in caplog.text
+    assert m.last_request.timeout == 5
+
+def test_list_entries_not_logged_in(mocker: MockerFixture, mock_config):
+    """Test list_entries when not logged in."""
+    mocker.patch("client.auth.get_auth", return_value={})
+    console_mock = mocker.patch("client.entries_cli.console.print")
+    result = runner.invoke(entries.entry_app, ["list"])
+    
+    assert result.exit_code == 1
+    assert "❌ Please login first." in console_mock.call_args[0][0]
+
+def test_list_entries_http_error(mocker: MockerFixture, mock_config, caplog):
+    """Test list_entries with HTTP error."""
+    caplog.set_level("ERROR")
+    mocker.patch("client.auth.get_auth", return_value={"Authorization": "Bearer test_token"})
+    with requests_mock.Mocker() as m:
+        m.get("http://test-api/entries", json={"error": "Unauthorized"}, status_code=401)
+        handle_error_mock = mocker.patch("client.utils.handle_error")
+        result = runner.invoke(entries.entry_app, ["list"])
+    
+    assert result.exit_code == 1
+    handle_error_mock.assert_called_once()
+    assert handle_error_mock.call_args[0][0].status_code == 401
+    assert handle_error_mock.call_args[0][0].json() == {"error": "Unauthorized"}
+    assert handle_error_mock.call_args[0][2] == "Failed to list entries"
+    assert "Failed to list entries" in caplog.text
+
+def test_list_entries_network_error(mocker: MockerFixture, mock_config, caplog):
+    """Test list_entries with network error."""
+    caplog.set_level("ERROR")
+    mocker.patch("client.auth.get_auth", return_value={"Authorization": "Bearer test_token"})
+    with requests_mock.Mocker() as m:
+        m.get("http://test-api/entries", exc=requests.exceptions.RequestException("Network error"))
+        handle_error_mock = mocker.patch("client.utils.handle_error")
+        result = runner.invoke(entries.entry_app, ["list"])
+    
+    assert result.exit_code == 1
+    handle_error_mock.assert_called_once()
+    assert isinstance(handle_error_mock.call_args[0][1], requests.exceptions.RequestException)
+    assert handle_error_mock.call_args[0][2] == "Failed to list entries"
+    assert "Failed to list entries" in caplog.text
+
+def test_create_entry_success(mocker: MockerFixture, mock_config, caplog):
+    """Test create entry command success."""
+    caplog.set_level("INFO")
+    mocker.patch("client.auth.get_auth", return_value={"Authorization": "Bearer test_token"})
+    with requests_mock.Mocker() as m:
+        m.post(
+            "http://test-api/entries",
+            json={"id": 1, "title": "Test Title", "content": "Test Content", "tags": ["tag1", "tag2"]},
+            status_code=201
+        )
+        console_mock = mocker.patch("client.entries_cli.console.print")
+        result = runner.invoke(entries.entry_app, ["create", "Test Title", "Test Content", "--tags", "tag1,tag2"])
+    
+    assert result.exit_code == 0
+    assert "✅ Entry created successfully!" in console_mock.call_args[0][0]
+    assert "Created entry: Test Title" in caplog.text
+    assert m.last_request.json() == {"title": "Test Title", "content": "Test Content", "tags": ["tag1", "tag2"]}
+    assert m.last_request.headers["Authorization"] == "Bearer test_token"
+    assert m.last_request.timeout == 5
+
+def test_create_entry_no_tags(mocker: MockerFixture, mock_config, caplog):
+    """Test create entry without tags."""
+    caplog.set_level("INFO")
+    mocker.patch("client.auth.get_auth", return_value={"Authorization": "Bearer test_token"})
+    with requests_mock.Mocker() as m:
+        m.post(
+            "http://test-api/entries",
+            json={"id": 1, "title": "Test Title", "content": "Test Content", "tags": []},
+            status_code=201
+        )
+        console_mock = mocker.patch("client.entries_cli.console.print")
+        result = runner.invoke(entries.entry_app, ["create", "Test Title", "Test Content"])
+    
+    assert result.exit_code == 0
+    assert "✅ Entry created successfully!" in console_mock.call_args[0][0]
+    assert "Created entry: Test Title" in caplog.text
+    assert m.last_request.json() == {"title": "Test Title", "content": "Test Content", "tags": []}
+    assert m.last_request.timeout == 5
+
+def test_create_entry_invalid_input(mocker: MockerFixture, mock_config, caplog):
+    """Test create entry with empty title."""
+    caplog.set_level("ERROR")
+    mocker.patch("client.auth.get_auth", return_value={"Authorization": "Bearer test_token"})
+    console_mock = mocker.patch("client.entries_cli.console.print")
+    result = runner.invoke(entries.entry_app, ["create", "", "Test Content"])
+    
+    assert result.exit_code == 1
+    assert "❌ Title cannot be empty." in console_mock.call_args[0][0]
+    assert "Invalid input" in caplog.text
+
+def test_create_entry_not_logged_in(mocker: MockerFixture, mock_config):
+    """Test create entry when not logged in."""
+    mocker.patch("client.auth.get_auth", return_value={})
+    console_mock = mocker.patch("client.entries_cli.console.print")
+    result = runner.invoke(entries.entry_app, ["create", "Test Title", "Test Content"])
+    
+    assert result.exit_code == 1
+    assert "❌ Please login first." in console_mock.call_args[0][0]
+
+def test_create_entry_http_error(mocker: MockerFixture, mock_config, caplog):
+    """Test create entry with HTTP error."""
+    caplog.set_level("ERROR")
+    mocker.patch("client.auth.get_auth", return_value={"Authorization": "Bearer test_token"})
+    with requests_mock.Mocker() as m:
+        m.post("http://test-api/entries", json={"error": "Bad request"}, status_code=400)
+        handle_error_mock = mocker.patch("client.utils.handle_error")
+        result = runner.invoke(entries.entry_app, ["create", "Test Title", "Test Content"])
+    
+    assert result.exit_code == 1
+    handle_error_mock.assert_called_once()
+    assert handle_error_mock.call_args[0][0].status_code == 400
+    assert handle_error_mock.call_args[0][0].json() == {"error": "Bad request"}
+    assert handle_error_mock.call_args[0][2] == "Failed to create entry"
+    assert "Failed to create entry" in caplog.text
+
+def test_delete_entry_success(mocker: MockerFixture, mock_config, caplog):
+    """Test delete entry successfully."""
+    caplog.set_level("INFO")
+    mocker.patch("client.auth.get_auth", return_value={"Authorization": "Bearer test_token"})
+    with requests_mock.Mocker() as m:
+        m.delete("http://test-api/entries/1", json={"message": "Entry deleted successfully"}, status_code=200)
+        console_mock = mocker.patch("client.entries_cli.console.print")
+        result = runner.invoke(entries.entry_app, ["delete", "1"])
+    
+    assert result.exit_code == 0
+    assert "✅ Entry deleted successfully!" in console_mock.call_args[0][0]
+    assert "Deleted entry ID 1" in caplog.text
+    assert m.last_request.headers["Authorization"] == "Bearer test_token"
+    assert m.last_request.timeout == 5
+
+def test_delete_entry_not_found(mocker: MockerFixture, mock_config, caplog):
+    """Test delete entry when entry not found."""
+    caplog.set_level("ERROR")
+    mocker.patch("client.auth.get_auth", return_value={"Authorization": "Bearer test_token"})
+    with requests_mock.Mocker() as m:
+        m.delete("http://test-api/entries/1", json={"error": "Not found"}, status_code=404)
+        console_mock = mocker.patch("client.entries_cli.console.print")
+        result = runner.invoke(entries.entry_app, ["delete", "1"])
+    
+    assert result.exit_code == 0
+    assert "⚠️ Entry not found." in console_mock.call_args[0][0]
+    assert "Failed to delete entry" in caplog.text
+
+def test_delete_entry_invalid_id(mocker: MockerFixture, mock_config, caplog):
+    """Test delete entry with invalid ID."""
+    caplog.set_level("ERROR")
+    mocker.patch("client.auth.get_auth", return_value={"Authorization": "Bearer test_token"})
+    console_mock = mocker.patch("client.entries_cli.console.print")
+    result = runner.invoke(entries.entry_app, ["delete", "invalid"])
+    
+    assert result.exit_code == 1
+    assert "❌ Invalid entry ID. Must be a positive integer." in console_mock.call_args[0][0]
+    assert "Invalid input" in caplog.text
+
+def test_delete_entry_not_logged_in(mocker: MockerFixture, mock_config):
+    """Test delete entry when not logged in."""
+    mocker.patch("client.auth.get_auth", return_value={})
+    console_mock = mocker.patch("client.entries_cli.console.print")
+    result = runner.invoke(entries.entry_app, ["delete", "1"])
+    
+    assert result.exit_code == 1
+    assert "❌ Please login first." in console_mock.call_args[0][0]
+
+def test_delete_entry_http_error(mocker: MockerFixture, mock_config, caplog):
+    """Test delete entry with other HTTP error."""
+    caplog.set_level("ERROR")
+    mocker.patch("client.auth.get_auth", return_value={"Authorization": "Bearer test_token"})
+    with requests_mock.Mocker() as m:
+        m.delete("http://test-api/entries/1", json={"error": "Unauthorized"}, status_code=401)
+        handle_error_mock = mocker.patch("client.utils.handle_error")
+        result = runner.invoke(entries.entry_app, ["delete", "1"])
+    
+    assert result.exit_code == 1
+    handle_error_mock.assert_called_once()
+    assert handle_error_mock.call_args[0][0].status_code == 401
+    assert handle_error_mock.call_args[0][0].json() == {"error": "Unauthorized"}
+    assert handle_error_mock.call_args[0][2] == "Failed to delete entry"
+    assert "Failed to delete entry" in caplog.text
+
+def test_update_entry_success(mocker: MockerFixture, mock_config, caplog):
+    """Test update entry command success."""
+    caplog.set_level("INFO")
+    mocker.patch("client.auth.get_auth", return_value={"Authorization": "Bearer test_token"})
+    with requests_mock.Mocker() as m:
+        m.put(
+            "http://test-api/entries/1",
+            json={"id": 1, "title": "Updated Title", "content": "Updated Content", "tags": ["tag3"]},
+            status_code=200
+        )
+        console_mock = mocker.patch("client.entries_cli.console.print")
+        result = runner.invoke(entries.entry_app, ["update", "1", "Updated Title", "Updated Content", "--tags", "tag3"])
+    
+    assert result.exit_code == 0
+    assert "✅ Entry updated successfully!" in console_mock.call_args[0][0]
+    assert "Updated entry ID 1" in caplog.text
+    assert m.last_request.json() == {"title": "Updated Title", "content": "Updated Content", "tags": ["tag3"]}
+    assert m.last_request.headers["Authorization"] == "Bearer test_token"
+    assert m.last_request.timeout == 5
+
+def test_update_entry_no_tags(mocker: MockerFixture, mock_config, caplog):
+    """Test update entry without tags."""
+    caplog.set_level("INFO")
+    mocker.patch("client.auth.get_auth", return_value={"Authorization": "Bearer test_token"})
+    with requests_mock.Mocker() as m:
+        m.put(
+            "http://test-api/entries/1",
+            json={"id": 1, "title": "Updated Title", "content": "Updated Content", "tags": []},
+            status_code=200
+        )
+        console_mock = mocker.patch("client.entries_cli.console.print")
+        result = runner.invoke(entries.entry_app, ["update", "1", "Updated Title", "Updated Content"])
+    
+    assert result.exit_code == 0
+    assert "✅ Entry updated successfully!" in console_mock.call_args[0][0]
+    assert "Updated entry ID 1" in caplog.text
+    assert m.last_request.json() == {"title": "Updated Title", "content": "Updated Content", "tags": []}
+    assert m.last_request.timeout == 5
+
+def test_update_entry_invalid_input(mocker: MockerFixture, mock_config, caplog):
+    """Test update entry with empty title."""
+    caplog.set_level("ERROR")
+    mocker.patch("client.auth.get_auth", return_value={"Authorization": "Bearer test_token"})
+    console_mock = mocker.patch("client.entries_cli.console.print")
+    result = runner.invoke(entries.entry_app, ["update", "1", "", "Updated Content"])
+    
+    assert result.exit_code == 1
+    assert "❌ Title cannot be empty." in console_mock.call_args[0][0]
+    assert "Invalid input" in caplog.text
+
+def test_update_entry_not_logged_in(mocker: MockerFixture, mock_config):
+    """Test update entry when not logged in."""
+    mocker.patch("client.auth.get_auth", return_value={})
+    console_mock = mocker.patch("client.entries_cli.console.print")
+    result = runner.invoke(entries.entry_app, ["update", "1", "Updated Title", "Updated Content"])
+    
+    assert result.exit_code == 1
+    assert "❌ Please login first." in console_mock.call_args[0][0]
+
+def test_update_entry_http_error(mocker: MockerFixture, mock_config, caplog):
+    """Test update entry with HTTP error."""
+    caplog.set_level("ERROR")
+    mocker.patch("client.auth.get_auth", return_value={"Authorization": "Bearer test_token"})
+    with requests_mock.Mocker() as m:
+        m.put("http://test-api/entries/1", json={"error": "Not found"}, status_code=404)
+        handle_error_mock = mocker.patch("client.utils.handle_error")
+        result = runner.invoke(entries.entry_app, ["update", "1", "Updated Title", "Updated Content"])
+    
+    assert result.exit_code == 1
+    handle_error_mock.assert_called_once()
+    assert handle_error_mock.call_args[0][0].status_code == 404
+    assert handle_error_mock.call_args[0][0].json() == {"error": "Not found"}
+    assert handle_error_mock.call_args[0][2] == "Failed to update entry"
+    assert "Failed to update entry" in caplog.text
+
+# test_handlers.py
+import pytest
+from journalapi.models import User, JournalEntry, Comment, EditHistory
+from journalapi.handlers.comment_handler import CommentHandler
+from journalapi.handlers.journal_entry_handler import JournalEntryHandler
+from journalapi.handlers.user_handler import UserHandler
+from extensions import db
+from werkzeug.security import generate_password_hash, check_password_hash
+
+def test_add_comment(db, app):
+    """Test adding a comment to a journal entry."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        db.session.commit()
+        
+        entry = JournalEntry(
+            user_id=user.id,
+            title="Test Entry",
+            content="Content",
+            tags=["test"]
+        )
+        db.session.add(entry)
+        db.session.commit()
+        
+        comment = CommentHandler.add_comment(
+            entry_id=entry.id,
+            user_id=user.id,
+            content="Test comment"
+        )
+        
+        assert comment["id"] is not None
+        assert comment["content"] == "Test comment"
+        assert comment["journal_entry_id"] == entry.id
+        assert comment["user_id"] == user.id
+
+def test_add_comment_invalid_entry(db, app):
+    """Test adding comment to non-existent entry."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        db.session.commit()
+        
+        with pytest.raises(ValueError, match="Entry not found"):
+            CommentHandler.add_comment(
+                entry_id=999,
+                user_id=user.id,
+                content="Test comment"
+            )
+
+def test_add_comment_invalid_content(db, app):
+    """Test adding comment with empty content."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        entry = JournalEntry(
+            user_id=user.id,
+            title="Test Entry",
+            content="Content",
+            tags=["test"]
+        )
+        db.session.add(entry)
+        db.session.commit()
+        
+        with pytest.raises(ValueError, match="Content cannot be empty"):
+            CommentHandler.add_comment(
+                entry_id=entry.id,
+                user_id=user.id,
+                content=""
+            )
+
+def test_get_comments(db, app):
+    """Test retrieving comments for a journal entry."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        entry = JournalEntry(
+            user_id=user.id,
+            title="Test Entry",
+            content="Content",
+            tags=["test"]
+        )
+        db.session.add(entry)
+        db.session.commit()
+        
+        comment = Comment(
+            journal_entry_id=entry.id,
+            user_id=user.id,
+            content="Test comment"
+        )
+        db.session.add(comment)
+        db.session.commit()
+        
+        comments = CommentHandler.get_comments(entry_id=entry.id)
+        
+        assert len(comments) == 1
+        assert comments[0]["content"] == "Test comment"
+        assert comments[0]["journal_entry_id"] == entry.id
+
+def test_update_comment(db, app):
+    """Test updating a comment."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        entry = JournalEntry(
+            user_id=user.id,
+            title="Test Entry",
+            content="Content",
+            tags=["test"]
+        )
+        db.session.add(entry)
+        comment = Comment(
+            journal_entry_id=entry.id,
+            user_id=user.id,
+            content="Original"
+        )
+        db.session.add(comment)
+        db.session.commit()
+        
+        updated = CommentHandler.update_comment(
+            comment_id=comment.id,
+            user_id=user.id,
+            content="Updated"
+        )
+        
+        assert updated is not None
+        assert updated["content"] == "Updated"
+        assert updated["id"] == comment.id
+
+def test_update_comment_unauthorized(db, app):
+    """Test updating a comment not owned."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        entry = JournalEntry(
+            user_id=user.id,
+            title="Test Entry",
+            content="Content",
+            tags=["test"]
+        )
+        db.session.add(entry)
+        comment = Comment(
+            journal_entry_id=entry.id,
+            user_id=user.id,
+            content="Original"
+        )
+        db.session.add(comment)
+        db.session.commit()
+        
+        result = CommentHandler.update_comment(
+            comment_id=comment.id,
+            user_id=999,  # Different user
+            content="Not allowed"
+        )
+        
+        assert result is None
+        # Verify comment wasn't changed
+        db_comment = Comment.query.get(comment.id)
+        assert db_comment.content == "Original"
+
+def test_update_comment_not_found(db, app):
+    """Test updating a non-existent comment."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        db.session.commit()
+        
+        result = CommentHandler.update_comment(
+            comment_id=999,
+            user_id=user.id,
+            content="Not found"
+        )
+        
+        assert result is None
+
+def test_delete_comment(db, app):
+    """Test deleting a comment."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        entry = JournalEntry(
+            user_id=user.id,
+            title="Test Entry",
+            content="Content",
+            tags=["test"]
+        )
+        db.session.add(entry)
+        comment = Comment(
+            journal_entry_id=entry.id,
+            user_id=user.id,
+            content="Comment"
+        )
+        db.session.add(comment)
+        db.session.commit()
+        
+        success = CommentHandler.delete_comment(
+            comment_id=comment.id,
+            user_id=user.id
+        )
+        
+        assert success
+        assert Comment.query.get(comment.id) is None
+
+def test_delete_comment_unauthorized(db, app):
+    """Test deleting a comment not owned."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        entry = JournalEntry(
+            user_id=user.id,
+            title="Test Entry",
+            content="Content",
+            tags=["test"]
+        )
+        db.session.add(entry)
+        comment = Comment(
+            journal_entry_id=entry.id,
+            user_id=user.id,
+            content="Comment"
+        )
+        db.session.add(comment)
+        db.session.commit()
+        
+        success = CommentHandler.delete_comment(
+            comment_id=comment.id,
+            user_id=999  # Different user
+        )
+        
+        assert not success
+        assert Comment.query.get(comment.id) is not None
+
+def test_create_entry(db, app):
+    """Test creating a journal entry."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        db.session.commit()
+        
+        entry = JournalEntryHandler.create_entry(
+            user_id=user.id,
+            title="Test Entry",
+            content="Content",
+            tags=["test"]
+        )
+        
+        assert entry["id"] is not None
+        assert entry["title"] == "Test Entry"
+        assert entry["content"] == "Content"
+        assert entry["tags"] == ["test"]
+        assert entry["user_id"] == user.id
+
+def test_create_entry_invalid_title(db, app):
+    """Test creating an entry with empty title."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        db.session.commit()
+        
+        with pytest.raises(ValueError, match="Title cannot be empty"):
+            JournalEntryHandler.create_entry(
+                user_id=user.id,
+                title="",
+                content="Content",
+                tags=["test"]
+            )
+
+def test_get_entries(db, app):
+    """Test retrieving entries for a user."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        entry = JournalEntry(
+            user_id=user.id,
+            title="Entry",
+            content="Content",
+            tags=["test"]
+        )
+        db.session.add(entry)
+        db.session.commit()
+        
+        entries = JournalEntryHandler.get_entries(user_id=user.id)
+        
+        assert len(entries) == 1
+        assert entries[0]["title"] == "Entry"
+        assert entries[0]["user_id"] == user.id
+
+def test_get_entry(db, app):
+    """Test retrieving a single entry."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        entry = JournalEntry(
+            user_id=user.id,
+            title="Entry",
+            content="Content",
+            tags=["test"]
+        )
+        db.session.add(entry)
+        db.session.commit()
+        
+        retrieved = JournalEntryHandler.get_entry(
+            entry_id=entry.id,
+            user_id=user.id
+        )
+        
+        assert retrieved is not None
+        assert retrieved["title"] == "Entry"
+        assert retrieved["id"] == entry.id
+
+def test_get_entry_not_found(db, app):
+    """Test retrieving a non-existent entry."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        db.session.commit()
+        
+        retrieved = JournalEntryHandler.get_entry(
+            entry_id=999,
+            user_id=user.id
+        )
+        
+        assert retrieved is None
+
+def test_update_entry(db, app):
+    """Test updating a journal entry."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        entry = JournalEntry(
+            user_id=user.id,
+            title="Original",
+            content="Original content",
+            tags=["original"]
+        )
+        db.session.add(entry)
+        db.session.commit()
+        
+        updated = JournalEntryHandler.update_entry(
+            entry_id=entry.id,
+            user_id=user.id,
+            title="Updated",
+            content="Updated content",
+            tags=["updated"]
+        )
+        
+        assert updated is not None
+        assert updated["title"] == "Updated"
+        assert updated["content"] == "Updated content"
+        assert updated["tags"] == ["updated"]
+        assert updated == ["user_id"] == user.id
+        
+        # Verify update in database
+        db_entry = JournalEntry.query.get(entry.id)
+        assert db_entry.title == "Updated"
+        assert db_entry.content == "Updated content"
+        assert db_entry.tags == ["updated"]
+
+def test_update_entry_unauthorized(db, app):
+    """Test updating an entry not owned."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        entry = JournalEntry(
+            user_id=user.id,
+            title="Original",
+            content="Original content",
+            tags=["original"]
+        )
+        db.session.add(entry)
+        db.session.commit()
+        
+        updated = JournalEntryHandler.update_entry(
+            entry_id=entry.id,
+            user_id=999,  # Different user
+            title="Not allowed",
+            content="Not allowed content",
+            tags=["notallowed"]
+        )
+        
+        assert updated is None
+        # Verify entry wasn't changed
+        db_entry = JournalEntry.query.get(entry.id)
+        assert db_entry.title == "Original"
+        assert db_entry.content == "Original content"
+        assert db_entry.tags == ["original"]
+
+def test_update_entry_not_found(db, app):
+    """Test updating a non-existent entry."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        db.session.commit()
+        
+        updated = JournalEntryHandler.update_entry(
+            entry_id=999,
+            user_id=user.id,
+            title="Not found",
+            content="Not found content",
+            tags=["notfound"]
+        )
+        
+        assert updated is None
+
+def test_delete_entry(db, app):
+    """Test deleting a journal entry."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        entry = JournalEntry(
+            user_id=user.id,
+            title="Entry",
+            content="Content",
+            tags=["test"]
+        )
+        db.session.add(entry)
+        db.session.commit()
+        
+        success = JournalEntryHandler.delete_entry(
+            entry_id=entry.id,
+            user_id=user.id
+        )
+        
+        assert success
+        assert JournalEntry.query.get(entry.id) is None
+
+def test_delete_entry_unauthorized(db, app):
+    """Test deleting an entry not owned."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        entry = JournalEntry(
+            user_id=user.id,
+            title="Entry",
+            content="Content",
+            tags=["test"]
+        )
+        db.session.add(entry)
+        db.session.commit()
+        
+        success = JournalEntryHandler.delete_entry(
+            entry_id=entry.id,
+            user_id=999  # Different user
+        )
+        
+        assert not success
+        assert JournalEntry.query.get(entry.id) is not None
+
+def test_register_user(db, app):
+    """Test registering a new user."""
+    with app.app_context():
+        user_data = {
+            "username": "newuser",
+            "email": "new@example.com",
+            "password": "newpass123"
+        }
+        user = UserHandler.register_user(**user_data)
+        
+        assert user is not None
+        assert user["username"] == "newuser"
+        assert user["email"] == "new@example.com"
+        assert check_password_hash(User.query.get(user["id"]).password_hash, "newpass123")
+
+def test_register_user_duplicate_email(db, app):
+    """Test registering with a duplicate email."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        db.session.commit()
+        
+        user_data = {
+            "username": "newuser",
+            "email": "test@example.com",
+            "password": "newpass123"
+        }
+        with pytest.raises(ValueError, match="Email already registered"):
+            UserHandler.register_user(**user_data)
+
+def test_get_user(db, app):
+    """Test retrieving a user."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        db.session.commit()
+        
+        retrieved = UserHandler.get_user(user_id=user.id)
+        
+        assert retrieved is not None
+        assert retrieved["username"] == "testuser"
+        assert retrieved["email"] == "test@example.com"
+
+def test_update_user(db, app):
+    """Test updating a user."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        db.session.commit()
+        
+        updated_data = {
+            "username": "updateduser",
+            "email": "updated@example.com",
+            "password": "updatedpass123"
+        }
+        updated = UserHandler.update_user(user_id=user.id, **updated_data)
+        
+        assert updated is not None
+        assert updated["username"] == "updateduser"
+        assert updated["email"] == "updated@example.com"
+        assert check_password_hash(User.query.get(user.id).password_hash, "updatedpass123")
+
+def test_delete_user(db, app):
+    """Test deleting a user."""
+    with app.app_context():
+        user = User(
+            username="testuser",
+            email="test@example.com",
+            password_hash=generate_password_hash("testpass")
+        )
+        db.session.add(user)
+        db.session.commit()
+        
+        success = UserHandler.delete_user(user_id=user.id)
+        
+        assert success
+        assert User.query.get(user.id) is None
+
+# test_journal_entry_routes.py
+import json
+
+def test_create_entry(client, auth_headers):
+    """Test creating a journal entry."""
+    response = client.post('/api/entries', json={
+        'title': 'Test Entry',
+        'content': 'Test content',
+        'tags': ['test']
+    }, headers=auth_headers)
+    
+    assert response.status_code == 201, f"Expected 201, got {response.status_code}: {response.get_data(as_text=True)}"
+    data = response.get_json()
+    assert 'id' in data
+    assert data['title'] == 'Test Entry'
+    assert data['content'] == 'Test content'
+    assert data['tags'] == ['test']
+    assert '_links' in data
+    assert 'self' in data['_links']
+    assert data['_links']['self'] == f'/api/entries/{data["id"]}'
+
+def test_create_entry_invalid_data(client, auth_headers):
+    """Test creating a journal entry with invalid data."""
+    response = client.post('/api/entries', json={
+        'title': '',  # Empty title
+        'content': 'Test content',
+        'tags': ['test']
+    }, headers=auth_headers)
+    
+    assert response.status_code == 422
+    data = response.get_json()
+    assert 'error' in data
+    assert 'title' in data['error']
+
+def test_create_entry_malformed_json(client, auth_headers):
+    """Test creating a journal entry with malformed JSON."""
+    response = client.post('/api/entries', data='{"title": "Test Entry",}',  # Invalid JSON
+                          headers=auth_headers)
+    
+    assert response.status_code == 400
+    data = response.get_json()
+    assert 'error' in data
+    assert 'Invalid JSON' in data['error']
+
+def test_get_entries(client, auth_headers):
+    """Test retrieving all entries for a user."""
+    # Create two entries
+    client.post('/api/entries', json={
+        'title': 'Entry 1',
+        'content': 'Content 1',
+        'tags': ['tag1']
+    }, headers=auth_headers)
+    
+    client.post('/api/entries', json={
+        'title': 'Entry 2',
+        'content': 'Content 2',
+        'tags': ['tag2']
+    }, headers=auth_headers)
+    
+    # Get all entries
+    response = client.get('/api/entries', headers=auth_headers)
+    
+    assert response.status_code == 200
+    entries = response.get_json()
+    assert len(entries) == 2
+    titles = [entry['title'] for entry in entries]
+    assert 'Entry 1' in titles
+    assert 'Entry 2' in titles
+    assert all('tags' in entry for entry in entries)
+    assert all('_links' in entry for entry in entries)
+
+def test_get_single_entry(client, auth_headers):
+    """Test retrieving a single entry."""
+    # Create entry
+    create_resp = client.post('/api/entries', json={
+        'title': 'Single Entry',
+        'content': 'Single content',
+        'tags': ['single']
+    }, headers=auth_headers)
+    assert create_resp.status_code == 201
+    entry_id = create_resp.get_json()['id']
+    
+    # Get entry
+    get_resp = client.get(f'/api/entries/{entry_id}', headers=auth_headers)
+    
+    assert get_resp.status_code == 200
+    data = get_resp.get_json()
+    assert data['title'] == 'Single Entry'
+    assert data['content'] == 'Single content'
+    assert data['tags'] == ['single']
+    assert '_links' in data
+    assert data['_links']['self'] == f'/api/entries/{entry_id}'
+
+def test_get_single_entry_not_found(client, auth_headers):
+    """Test retrieving a non-existent entry."""
+    response = client.get('/api/entries/999', headers=auth_headers)
+    
+    assert response.status_code == 404
+    data = response.get_json()
+    assert 'error' in data
+    assert 'Not found' in data['error']
+
+def test_get_single_entry_unauthorized(client, auth_headers):
+    """Test retrieving an entry not owned by the user."""
+    create_resp = client.post('/api/entries', json={
+        'title': 'Single Entry',
+        'content': 'Single content',
+        'tags': ['single']
+    }, headers=auth_headers)
+    assert create_resp.status_code == 201
+    entry_id = create_resp.get_json()['id']
+    
+    # Register and login as another user
+    client.post('/api/users/register', json={
+        'username': 'otheruser',
+        'email': 'other@example.com',
+        'password': 'otherpass123'
+    })
+    login_resp = client.post('/api/users/login', json={
+        'email': 'other@example.com',
+        'password': 'otherpass123'
+    })
+    assert login_resp.status_code == 200
+    other_token = login_resp.get_json()['token']
+    other_headers = {
+        'Authorization': f'Bearer {other_token}',
+        'Content-Type': 'application/json'
+    }
+    
+    get_resp = client.get(f'/api/entries/{entry_id}', headers=other_headers)
+    
+    assert get_resp.status_code == 403
+    data = get_resp.get_json()
+    assert 'error' in data
+    assert 'Not found or unauthorized' in data['error']
+
+def test_update_entry(client, auth_headers):
+    """Test updating an entry."""
+    create_resp = client.post('/api/entries', json={
+        'title': 'Original',
+        'content': 'Original content',
+        'tags': ['original']
+    }, headers=auth_headers)
+    assert create_resp.status_code == 201
+    entry_id = create_resp.get_json()['id']
+    
+    update_resp = client.put(f'/api/entries/{entry_id}', json={
+        'title': 'Updated',
+        'content': 'Updated content',
+        'tags': ['updated']
+    }, headers=auth_headers)
+    
+    assert update_resp.status_code == 200
+    data = update_resp.get_json()
+    assert data['title'] == 'Updated'
+    assert data['content'] == 'Updated content'
+    assert data['tags'] == ['updated']
+    
+    # Verify update
+    get_resp = client.get(f'/api/entries/{entry_id}', headers=auth_headers)
+    data = get_resp.get_json()
+    assert data['title'] == 'Updated'
+    assert data['content'] == 'Updated content'
+    assert data['tags'] == ['updated']
+
+def test_update_entry_invalid_data(client, auth_headers):
+    """Test updating an entry with invalid data."""
+    create_resp = client.post('/api/entries', json={
+        'title': 'Original',
+        'content': 'Original content'
+    }, headers=auth_headers)
+    assert create_resp.status_code == 201
+    entry_id = create_resp.get_json()['id']
+    
+    update_resp = client.put(f'/api/entries/{entry_id}', json={
+        'title': '',  # Empty title
+        'content': 'Updated content'
+    }, headers=auth_headers)
+    
+    assert update_resp.status_code == 422
+    data = update_resp.get_json()
+    assert 'error' in data
+    assert 'title' in data['error']
+
+def test_update_entry_not_found(client, auth_headers):
+    """Test updating a non-existent entry."""
+    response = client.put('/api/entries/999', json={
+        'title': 'Updated',
+        'content': 'Updated content',
+        'tags': ['updated']
+    }, headers=auth_headers)
+    
+    assert response.status_code == 404
+    data = response.get_json()
+    assert 'error' in data
+    assert 'Not found' in data['error']
+
+def test_update_entry_unauthorized(client, auth_headers):
+    """Test updating an entry not owned by the user."""
+    create_resp = client.post('/api/entries', json={
+        'title': 'Original',
+        'content': 'Original content',
+        'tags': ['original']
+    }, headers=auth_headers)
+    assert create_resp.status_code == 201
+    entry_id = create_resp.get_json()['id']
+    
+    # Register and login as another user
+    client.post('/api/users/register', json={
+        'username': 'otheruser',
+        'email': 'other@example.com',
+        'password': 'otherpass123'
+    })
+    login_resp = client.post('/api/users/login', json={
+        'email': 'other@example.com',
+        'password': 'otherpass123'
+    })
+    assert login_resp.status_code == 200
+    other_token = login_resp.get_json()['token']
+    other_headers = {
+        'Authorization': f'Bearer {other_token}',
+        'Content-Type': 'application/json'
+    }
+    
+    update_resp = client.put(f'/api/entries/{entry_id}', json={
+        'title': 'Updated',
+        'content': 'Updated content',
+        'tags': ['updated']
+    }, headers=other_headers)
+    
+    assert update_resp.status_code == 403
+    data = update_resp.get_json()
+    assert 'error' in data
+    assert 'Not found or unauthorized' in data['error']
+
+def test_delete_entry(client, auth_headers):
+    """Test deleting an entry."""
+    create_resp = client.post('/api/entries', json={
+        'title': 'To Delete',
+        'content': 'Delete me',
+        'tags': ['delete']
+    }, headers=auth_headers)
+    assert create_resp.status_code == 201
+    entry_id = create_resp.get_json()['id']
+    
+    delete_resp = client.delete(f'/api/entries/{entry_id}', headers=auth_headers)
+    
+    assert delete_resp.status_code == 200
+    data = delete_resp.get_json()
+    assert 'message' in data
+    assert data['message'] == 'Entry deleted successfully'
+    
+    # Verify deletion
+    get_resp = client.get(f'/api/entries/{entry_id}', headers=auth_headers)
+    assert get_resp.status_code == 404  # Changed from 403 to 404, assuming deleted entries are not found
+
+def test_delete_entry_not_found(client, auth_headers):
+    """Test deleting a non-existent entry."""
+    response = client.delete('/api/entries/999', headers=auth_headers)
+    
+    assert response.status_code == 404
+    data = response.get_json()
+    assert 'error' in data
+    assert 'Not found' in data['error']
+
+def test_delete_entry_unauthorized(client, auth_headers):
+    """Test deleting an entry not owned by the user."""
+    create_resp = client.post('/api/entries', json={
+        'title': 'To Delete',
+        'content': 'Delete me',
+        'tags': ['delete']
+    }, headers=auth_headers)
+    assert create_resp.status_code == 201
+    entry_id = create_resp.get_json()['id']
+    
+    # Register and login as another user
+    client.post('/api/users/register', json={
+        'username': 'otheruser',
+        'email': 'other@example.com',
+        'password': 'otherpass123'
+    })
+    login_resp = client.post('/api/users/login', json={
+        'email': 'other@example.com',
+        'password': 'otherpass123'
+    })
+    assert login_resp.status_code == 200
+    other_token = login_resp.get_json()['token']
+    other_headers = {
+        'Authorization': f'Bearer {other_token}',
+        'Content-Type': 'application/json'
+    }
+    
+    delete_resp = client.delete(f'/api/entries/{entry_id}', headers=other_headers)
+    
+    assert delete_resp.status_code == 403
+    data = delete_resp.get_json()
+    assert 'error' in data
+    assert 'Not found or unauthorized' in data['error']
+
+# test_main.py
+from pytest_mock import MockerFixture
+from typer.testing import CliRunner
+from client import main
+
+runner = CliRunner()
+
+def test_main_app_help(mocker: MockerFixture, caplog):
+    """Test main CLI help command."""
+    caplog.set_level("INFO")
+    mocker.patch("client.main.logger.info")
+    result = runner.invoke(main.app, ["--help"])
+    assert result.exit_code == 0
+    assert "PWP Journal API CLI - Manage your journal entries" in result.output
+    assert main.logger.info.call_args[0][0] == "Starting Journal API CLI"
+
+def test_main_app_subcommands(mocker: MockerFixture):
+    """Test main CLI subcommands registration."""
+    assert "auth" in [cmd.name for cmd in main.app.registered_commands]
+    assert "entry" in [cmd.name for cmd in main.app.registered_commands]
+    assert "comment" in [cmd.name for cmd in main.app.registered_commands]
+
+# test_user_routes.py
+import json
+import re
+
+def test_register_user(client):
+    """Test user registration."""
+    response = client.post('/api/users/register', json={
+        'username': 'newuser',
+        'email': 'new@example.com',
+        'password': 'newpass123'
+    })
+    
+    assert response.status_code == 201, f"Expected 201, got {response.status_code}: {response.get_data(as_text=True)}"
+    data = response.get_json()
+    assert 'message' in data
+    assert data['message'] == 'User registered successfully'
+    assert 'user' in data
+    assert data['user']['username'] == 'newuser'
+    assert data['user']['email'] == 'new@example.com'
+    assert '_links' in data
+    assert 'self' in data['_links']
+    assert re.match(r'/api/users/\d+', data['_links']['self'])
+
+def test_register_duplicate_email(client):
+    """Test registering with duplicate email."""
+    response = client.post('/api/users/register', json={
+        'username': 'user1',
+        'email': 'duplicate@example.com',
+        'password': 'password123'
+    })
+    assert response.status_code == 201
+    
+    response = client.post('/api/users/register', json={
+        'username': 'user2',
+        'email': 'duplicate@example.com',
+        'password': 'password123'
+    })
+    
+    assert response.status_code == 400
+    data = response.get_json()
+    assert 'error' in data
+    assert data['error'] == 'Email already registered'
+
+def test_register_duplicate_username(client):
+    """Test registering with duplicate username."""
+    response = client.post('/api/users/register', json={
+        'username': 'user1',
+        'email': 'user1@example.com',
+        'password': 'password123'
+    })
+    assert response.status_code == 201
+    
+    response = client.post('/api/users/register', json={
+        'username': 'user1',
+        'email': 'user2@example.com',
+        'password': 'password123'
+    })
+    
+    assert response.status_code == 400
+    data = response.get_json()
+    assert 'error' in data
+    assert data['error'] == 'Username already registered'
+
+def test_register_invalid_password(client):
+    """Test registering with a password that's too short."""
+    response = client.post('/api/users/register', json={
+        'username': 'newuser',
+        'email': 'new@example.com',
+        'password': '123'
+    })
+    
+    assert response.status_code == 422
+    data = response.get_json()
+    assert 'error' in data
+    assert 'password' in data['error']
+    assert 'Shorter than minimum length' in str(data['error'])
+
+def test_register_invalid_email(client):
+    """Test registering with an invalid email format."""
+    response = client.post('/api/users/register', json={
+        'username': 'newuser',
+        'email': 'invalid-email',
+        'password': 'newpass123'
+    })
+    
+    assert response.status_code == 422
+    data = response.get_json()
+    assert 'error' in data
+    assert 'email' in data['error']
+    assert 'Invalid email' in str(data['error'])
+
+def test_register_missing_fields(client):
+    """Test registering with missing fields."""
+    response = client.post('/api/users/register', json={
+        'username': 'newuser',
+        # Missing email and password
+    })
+    
+    assert response.status_code == 422
+    data = response.get_json()
+    assert 'error' in data
+    assert 'email' in data['error']
+    assert 'password' in data['error']
+
+def test_login_user(client):
+    """Test user login."""
+    response = client.post('/api/users/register', json={
+        'username': 'loginuser',
+        'email': 'login@example.com',
+        'password': 'loginpass123'
+    })
+    assert response.status_code == 201
+    
+    response = client.post('/api/users/login', json={
+        'email': 'login@example.com',
+        'password': 'loginpass123'
+    })
+    
+    assert response.status_code == 200
+    data = response.get_json()
+    assert 'token' in data
+    assert isinstance(data['token'], str)
+    assert len(data['token'].split('.')) == 3  # Basic JWT format check
+    assert '_links' in data
+    assert 'self' in data['_links']
+    assert re.match(r'/api/users/\d+', data['_links']['self'])
+
+def test_login_invalid_credentials(client):
+    """Test login with incorrect password."""
+    response = client.post('/api/users/register', json={
+        'username': 'loginuser',
+        'email': 'login@example.com',
+        'password': 'loginpass123'
+    })
+    assert response.status_code == 201
+    
+    response = client.post('/api/users/login', json={
+        'email': 'login@example.com',
+        'password': 'wrongpass'
+    })
+    
+    assert response.status_code == 401
+    data = response.get_json()
+    assert 'error' in data
+    assert 'Invalid credentials' in data['error']
+
+def test_login_non_existent_user(client):
+    """Test login with non-existent email."""
+    response = client.post('/api/users/login', json={
+        'email': 'nonexistent@example.com',
+        'password': 'anypass123'
+    })
+    
+    assert response.status_code == 401
+    data = response.get_json()
+    assert 'error' in data
+    assert 'Invalid credentials' in data['error']
+
+def test_get_user(client, auth_headers):
+    """Test getting user details."""
+    # Register a new user to avoid relying on auth_headers user
+    response = client.post('/api/users/register', json={
+        'username': 'testuser',
+        'email': 'test@example.com',
+        'password': 'testpass123'
+    })
+    assert response.status_code == 201
+    user_id = response.get_json()['user']['id']
+    
+    # Login to get token
+    login_resp = client.post('/api/users/login', json={
+        'email': 'test@example.com',
+        'password': 'testpass123'
+    })
+    assert login_resp.status_code == 200
+    token = login_resp.get_json()['token']
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }
+    
+    response = client.get(f'/api/users/{user_id}', headers=headers)
+    
+    assert response.status_code == 200
+    data = response.get_json()
+    assert 'username' in data
+    assert 'email' in data
+    assert data['username'] == 'testuser'
+    assert data['email'] == 'test@example.com'
+    assert '_links' in data
+    assert data['_links']['self'] == f'/api/users/{user_id}'
+
+def test_get_user_not_found(client, auth_headers):
+    """Test getting a non-existent user."""
+    response = client.get('/api/users/999', headers=auth_headers)
+    
+    assert response.status_code == 404
+    data = response.get_json()
+    assert 'error' in data
+    assert 'User not found' in data['error']
+
+def test_get_user_unauthorized(client, auth_headers):
+    """Test getting another user's details."""
+    # Register user1
+    response = client.post('/api/users/register', json={
+        'username': 'user1',
+        'email': 'user1@example.com',
+        'password': 'pass123'
+    })
+    assert response.status_code == 201
+    user1_id = response.get_json()['user']['id']
+    
+    # Register user2 and get token
+    response = client.post('/api/users/register', json={
+        'username': 'user2',
+        'email': 'user2@example.com',
+        'password': 'pass123'
+    })
+    assert response.status_code == 201
+    login_resp = client.post('/api/users/login', json={
+        'email': 'user2@example.com',
+        'password': 'pass123'
+    })
+    assert login_resp.status_code == 200
+    user2_token = login_resp.get_json()['token']
+    user2_headers = {
+        'Authorization': f'Bearer {user2_token}',
+        'Content-Type': 'application/json'
+    }
+    
+    response = client.get(f'/api/users/{user1_id}', headers=user2_headers)
+    
+    assert response.status_code == 403
+    data = response.get_json()
+    assert 'error' in data
+    assert 'Unauthorized' in data['error']
+
+def test_update_user(client, auth_headers):
+    """Test updating user details."""
+    # Register a new user
+    response = client.post('/api/users/register', json={
+        'username': 'testuser',
+        'email': 'test@example.com',
+        'password': 'testpass123'
+    })
+    assert response.status_code == 201
+    user_id = response.get_json()['user']['id']
+    
+    # Login to get token
+    login_resp = client.post('/api/users/login', json={
+        'email': 'test@example.com',
+        'password': 'testpass123'
+    })
+    assert login_resp.status_code == 200
+    token = login_resp.get_json()['token']
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }
+    
+    response = client.put(f'/api/users/{user_id}', json={
+        'username': 'updateduser',
+        'email': 'updated@example.com',
+        'password': 'updatedpass123'
+    }, headers=headers)
+    
+    assert response.status_code == 200
+    data = response.get_json()
+    assert 'message' in data
+    assert data['message'] == 'User updated successfully'
+    assert 'user' in data
+    assert data['user']['username'] == 'updateduser'
+    assert data['user']['email'] == 'updated@example.com'
+    
+    # Verify update
+    get_resp = client.get(f'/api/users/{user_id}', headers=headers)
+    get_data = get_resp.get_json()
+    assert get_data['username'] == 'updateduser'
+    assert get_data['email'] == 'updated@example.com'
+
+def test_update_user_invalid_data(client, auth_headers):
+    """Test updating user with invalid data."""
+    # Register a new user
+    response = client.post('/api/users/register', json={
+        'username': 'testuser',
+        'email': 'test@example.com',
+        'password': 'testpass123'
+    })
+    assert response.status_code == 201
+    user_id = response.get_json()['user']['id']
+    
+    # Login to get token
+    login_resp = client.post('/api/users/login', json={
+        'email': 'test@example.com',
+        'password': 'testpass123'
+    })
+    assert login_resp.status_code == 200
+    token = login_resp.get_json()['token']
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }
+    
+    response = client.put(f'/api/users/{user_id}', json={
+        'username': '',
+        'email': 'invalid-email',
+        'password': '123'
+    }, headers=headers)
+    
+    assert response.status_code == 422
+    data = response.get_json()
+    assert 'error' in data
+    assert 'username' in data['error']
+    assert 'email' in data['error']
+    assert 'password' in data['error']
+
+def test_update_user_unauthorized(client, auth_headers):
+    """Test updating another user's details."""
+    # Register user1
+    response = client.post('/api/users/register', json={
+        'username': 'user1',
+        'email': 'user1@example.com',
+        'password': 'pass123'
+    })
+    assert response.status_code == 201
+    user1_id = response.get_json()['user']['id']
+    
+    # Register user2 and get token
+    response = client.post('/api/users/register', json={
+        'username': 'user2',
+        'email': 'user2@example.com',
+        'password': 'pass123'
+    })
+    assert response.status_code == 201
+    login_resp = client.post('/api/users/login', json={
+        'email': 'user2@example.com',
+        'password': 'pass123'
+    })
+    assert login_resp.status_code == 200
+    user2_token = login_resp.get_json()['token']
+    user2_headers = {
+        'Authorization': f'Bearer {user2_token}',
+        'Content-Type': 'application/json'
+    }
+    
+    response = client.put(f'/api/users/{user1_id}', json={
+        'username': 'hacked',
+        'email': 'hacked@example.com',
+        'password': 'hacked123'
+    }, headers=user2_headers)
+    
+    assert response.status_code == 403
+    data = response.get_json()
+    assert 'error' in data
+    assert 'Unauthorized' in data['error']
+
+def test_delete_user(client, auth_headers):
+    """Test deleting a user."""
+    # Register a new user
+    register_resp = client.post('/api/users/register', json={
+        'username': 'todelete',
+        'email': 'todelete@example.com',
+        'password': 'deletepass123'
+    })
+    assert register_resp.status_code == 201
+    user_id = register_resp.get_json()['user']['id']
+    
+    # Login to get token
+    login_resp = client.post('/api/users/login', json={
+        'email': 'todelete@example.com',
+        'password': 'deletepass123'
+    })
+    assert login_resp.status_code == 200
+    token = login_resp.get_json()['token']
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }
+    
+    delete_resp = client.delete(f'/api/users/{user_id}', headers=headers)
+    assert delete_resp.status_code == 200
+    delete_data = delete_resp.get_json()
+    assert 'message' in delete_data
+    assert delete_data['message'] == 'User deleted successfully'
+    
+    # Verify deletion
+    get_resp = client.get(f'/api/users/{user_id}', headers=headers)
+    assert get_resp.status_code == 404
+    
+    # Verify login fails
+    login_resp = client.post('/api/users/login', json={
+        'email': 'todelete@example.com',
+        'password': 'deletepass123'
+    })
+    assert login_resp.status_code == 401
+
+def test_delete_user_unauthorized(client, auth_headers):
+    """Test deleting another user's account."""
+    # Register user1
+    response = client.post('/api/users/register', json={
+        'username': 'user1',
+        'email': 'user1@example.com',
+        'password': 'pass123'
+    })
+    assert response.status_code == 201
+    user1_id = response.get_json()['user']['id']
+    
+    # Register user2 and get token
+    response = client.post('/api/users/register', json={
+        'username': 'user2',
+        'email': 'user2@example.com',
+        'password': 'pass123'
+    })
+    assert response.status_code == 201
+    login_resp = client.post('/api/users/login', json={
+        'email': 'user2@example.com',
+        'password': 'pass123'
+    })
+    assert login_resp.status_code == 200
+    user2_token = login_resp.get_json()['token']
+    user2_headers = {
+        'Authorization': f'Bearer {user2_token}',
+        'Content-Type': 'application/json'
+    }
+    
+    delete_resp = client.delete(f'/api/users/{user1_id}', headers=user2_headers)
+    assert delete_resp.status_code == 403
+    data = delete_resp.get_json()
+    assert 'error' in data
+    assert 'Unauthorized' in data['error']
+
+# test_utils.py
+import pytest
+import json
+from flask import current_app
+from journalapi.utils import json_response, authenticate_user, generate_token, handle_error
+from journalapi.models import User
+from werkzeug.security import generate_password_hash, check_password_hash
+from pytest_mock import MockerFixture
+
+def test_json_response():
+    """Test the json_response utility function."""
+    data = {'key': 'value'}
+    response = json_response(data, 201)
+    
+    assert response.status_code == 201
+    assert response.mimetype == 'application/json'
+    assert json.loads(response.get_data(as_text=True)) == data
+    assert response.headers['Content-Type'] == 'application/json'
+
+def test_json_response_non_serializable():
+    """Test json_response with non-serializable data."""
+    data = {'key': set([1, 2, 3])}  # Sets are not JSON serializable
+    with pytest.raises(TypeError, match="is not JSON serializable"):
+        json_response(data, 200)
+
+def test_json_response_different_status():
+    """Test json_response with different status code."""
+    data = {'message': 'OK'}
+    response = json_response(data, 404)
+    
+    assert response.status_code == 404
+    assert response.mimetype == 'application/json'
+    assert json.loads(response.get_data(as_text=True)) == data
+
+def test_authenticate_user(app, db):
+    """Test user authentication utility."""
+    with app.app_context():
+        user = User(
+            username='testauth',
+            email='auth@example.com',
+            password_hash=generate_password_hash('authpass')
+        )
+        db.session.add(user)
+        db.session.commit()
+        
+        authenticated = authenticate_user('testauth', 'authpass')
+        assert authenticated is not None
+        assert authenticated.username == 'testauth'
+        assert authenticated.email == 'auth@example.com'
+        assert check_password_hash(authenticated.password_hash, 'authpass')
+        
+        failed = authenticate_user('testauth', 'wrongpass')
+        assert failed is None
+
+def test_authenticate_user_non_existent(app, db):
+    """Test authentication with non-existent user."""
+    with app.app_context():
+        authenticated = authenticate_user('nonexistent', 'anypass')
+        assert authenticated is None
+
+def test_authenticate_user_empty_credentials(app, db):
+    """Test authentication with empty credentials."""
+    with app.app_context():
+        with pytest.raises(ValueError, match="Username and password are required"):
+            authenticate_user('', '')
+        with pytest.raises(ValueError, match="Username and password are required"):
+            authenticate_user('testauth', '')
+        with pytest.raises(ValueError, match="Username and password are required"):
+            authenticate_user('', 'anypass')
+
+def test_generate_token(app, mocker: MockerFixture):
+    """Test token generation utility."""
+    with app.app_context():
+        user = User(id=1, username='tokenuser')
+        mock_jwt = mocker.patch("journalapi.utils.jwt.encode")
+        mock_jwt.return_value = "mocked_token"
+        
+        token = generate_token(user)
+        
+        assert token == 'mocked_token'
+        mock_jwt.assert_called_once()
+        call_args = mock_jwt.call_args[0]
+        payload = call_args[0]
+        assert payload['user_id'] == 1
+        assert payload['username'] == 'tokenuser'
+        assert 'exp' in payload
+        assert call_args[1] == current_app.config['SECRET_KEY']
+        assert call_args[2] == 'HS256'
+
+def test_generate_token_invalid_user(app, mocker: MockerFixture):
+    """Test token generation with invalid user."""
+    with app.app_context():
+        user = User(id=None, username='invaliduser')  # Missing ID
+        with pytest.raises(ValueError, match="User must have a valid ID"):
+            generate_token(user)
+
+def test_generate_token_missing_config(app, mocker: MockerFixture):
+    """Test token generation with missing secret key."""
+    with app.app_context():
+        user = User(id=1, username='tokenuser')
+        mocker.patch.dict(current_app.config, {'SECRET_KEY': None})
+        with pytest.raises(ValueError, match="Missing JWT secret key"):
+            generate_token(user)
+
+def test_handle_error(app, mocker: MockerFixture):
+    """Test handle_error utility with JSON response."""
+    with app.app_context():
+        mock_response = mocker.Mock()
+        mock_response.json.return_value = {"error": "Bad request"}
+        mock_response.text = "Bad request"
+        mock_response.status_code = 400
+        mock_logger = mocker.patch("journalapi.utils.logger.error")
+        
+        result = handle_error(mock_response, Exception("test"), "Test error")
+        
+        assert result == {"error": "Bad request"}
+        mock_logger.error.assert_called_with("Test error: %s", {"error": "Bad request"})
+
+def test_handle_error_no_json(app, mocker: MockerFixture):
+    """Test handle_error with no JSON response."""
+    with app.app_context():
+        mock_response = mocker.Mock()
+        mock_response.json.side_effect = ValueError("Invalid JSON")
+        mock_response.text = "Server error"
+        mock_response.status_code = 500
+        mock_logger = mocker.patch("journalapi.utils.logger.error")
+        
+        result = handle_error(mock_response, Exception("test"), "Test error")
+        
+        assert result == {"error": "Server error"}
+        mock_logger.error.assert_called_with("Test error: %s", "Server error")
+
