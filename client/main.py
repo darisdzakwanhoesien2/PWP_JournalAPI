@@ -1,21 +1,17 @@
 # PWP_JournalAPI/client/main.py
 """Main CLI application for the Journal API."""
-import logging
-
 import typer
+import logging
+from .auth_cli import auth_app
+from .entries_cli import entry_app
+from .comments_cli import comment_app
 
-from auth_cli import auth_app
-from entries_cli import entry_app
-from comments_cli import comment_app
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+app = typer.Typer()
 logger = logging.getLogger(__name__)
 
-app = typer.Typer(help="PWP Journal API CLI - Manage your journal entries")
-app.add_typer(auth_app, name="auth", help="Manage user authentication")
-app.add_typer(entry_app, name="entry", help="Manage journal entries")
-app.add_typer(comment_app, name="comment", help="Manage comments")
+app.add_typer(auth_app, name="auth")
+app.add_typer(entry_app, name="entry")
+app.add_typer(comment_app, name="comment")
 
 if __name__ == "__main__":
-    logger.info("Starting Journal API CLI")
     app()
