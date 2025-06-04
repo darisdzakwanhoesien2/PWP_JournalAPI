@@ -1,0 +1,851 @@
+# __init__.py
+"""Initialize the Flask application for the Journal API."""
+import os
+from typing import Optional, Dict, Any
+from flask import Flask
+from flask_jwt_extended import JWTManager
+from dotenv import load_dotenv
+from extensions import db
+from journalapi import api
+from journalapi.cli import init_db_command
+
+load_dotenv()
+
+def create_app(test_config: Optional[Dict[str, Any]] = None) -> Flask:
+    """Create and configure the Flask application.
+    
+    Args:
+        test_config: Configuration for testing.
+    
+    Returns:
+        Flask: The configured Flask application instance.
+    """
+    app = Flask(__name__, instance_relative_config=True)
+    app.config.from_mapping(
+        SECRET_KEY=os.getenv("SECRET_KEY", "dev"),
+        SQLALCHEMY_DATABASE_URI=os.getenv("SQLALCHEMY_DATABASE_URI", 
+            f"sqlite:///{os.path.join(app.instance_path, 'journal.db')}"),
+        SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        JWT_SECRET_KEY=os.getenv("JWT_SECRET_KEY", "test-secret-key")
+    )
+
+    if test_config:
+        app.config.update(test_config)
+    else:
+        app.config.from_pyfile("config.py", silent=True)
+
+    try:
+        os.makedirs(app.instance_path, exist_ok=True)
+    except OSError:
+        pass
+
+    db.init_app(app)
+    JWTManager(app)
+
+    app.register_blueprint(api.api_bp)
+    app.cli.add_command(init_db_command)
+
+    return app
+
+# api.py
+"""API blueprint and resource definitions for the Journal API."""
+from flask import Blueprint
+from flask_restful import Api
+from journalapi.resources.user import UserRegisterResource, UserLoginResource, UserResource
+from journalapi.resources.journal_entry import JournalEntryListResource, JournalEntryResource
+from journalapi.resources.comment import CommentCollectionResource, CommentItemResource
+from journalapi.resources.edit_history import EditHistoryResource
+
+api_bp = Blueprint("api", __name__, url_prefix="/api")
+api = Api(api_bp)
+
+# User endpoints
+api.add_resource(UserRegisterResource, "/users/register")
+api.add_resource(UserLoginResource, "/users/login")
+api.add_resource(UserResource, "/users/<int:user_id>")
+
+# Journal entry endpoints
+api.add_resource(JournalEntryListResource, "/journal_entries")
+api.add_resource(JournalEntryResource, "/journal_entries/<int:entry_id>")
+
+# Comment endpoints
+api.add_resource(CommentCollectionResource, "/journal_entries/<int:entry_id>/comments")
+api.add_resource(CommentItemResource, "/journal_entries/<int:entry_id>/comments/<int:comment_id>")
+
+# Edit history endpoint
+api.add_resource(EditHistoryResource, "/journal_entries/<int:entry_id>/history")
+
+# cli.py
+# PWP_JournalAPI/journalapi/cli.py
+"""Command-line interface commands for the Journal API."""
+import click
+from flask.cli import with_appcontext
+from extensions import db
+
+@click.command("init-db")
+@with_appcontext
+def init_db_command():
+    """Initialize the database with required tables."""
+    db.create_all()
+    click.echo("Initialized the database.")
+
+
+# data.py
+from pathlib import Path
+import json
+
+def extract_content_from_ipynb(file_path: Path) -> str:
+    """
+    Extracts and concatenates the content of a Jupyter Notebook (.ipynb) file.
+    Both code cells and markdown cells are extracted, preserving the order.
+    Each cell is annotated with a header indicating its type.
+    """
+    try:
+        notebook = json.loads(file_path.read_text(encoding="utf-8"))
+        cells = notebook.get("cells", [])
+        content_lines = []
+        for idx, cell in enumerate(cells, start=1):
+            cell_type = cell.get("cell_type", "unknown")
+            # Add a header for this cell
+            if cell_type == "code":
+                content_lines.append(f"### Cell {idx}: Code")
+            elif cell_type == "markdown":
+                content_lines.append(f"### Cell {idx}: Markdown")
+            else:
+                content_lines.append(f"### Cell {idx}: {cell_type}")
+            # Join the source lines; they are typically stored as a list of lines.
+            source = "".join(cell.get("source", []))
+            content_lines.append(source)
+            content_lines.append("\n")  # Extra newline after each cell
+        return "\n".join(content_lines)
+    except Exception as e:
+        return f"# Error reading {file_path}: {e}"
+
+def export_code_and_directory_list(root_directory=".", code_file="code.txt", list_file="directories.txt"):
+    """
+    Traverses the given root directory to find all files with a .py or .ipynb extension.
+    Writes to two files:
+      - directories.txt: A list of the file paths.
+      - code.txt: Each file’s path (as header) followed by its content.
+        For .ipynb files, both code and markdown cells are included.
+    """
+    root = Path(root_directory)
+    # Collect both .py and .ipynb files
+    files = list(root.rglob("*.py")) + list(root.rglob("*.ipynb"))
+    # Optional: sort files for a consistent order
+    files.sort(key=lambda p: p.as_posix())
+
+    with open(code_file, "w", encoding="utf-8") as code_out, open(list_file, "w", encoding="utf-8") as list_out:
+        for file_path in files:
+            # Write the file path to the directories file
+            list_out.write(f"{file_path}\n")
+            
+            # Write the file path header in the code file
+            code_out.write(f"# {file_path}\n")
+            
+            # Process the file according to its extension
+            if file_path.suffix == ".ipynb":
+                content = extract_content_from_ipynb(file_path)
+            else:
+                try:
+                    content = file_path.read_text(encoding="utf-8")
+                except Exception as e:
+                    content = f"# Error reading {file_path}: {e}"
+            
+            code_out.write(content)
+            code_out.write("\n\n")  # Add separation for readability
+
+if __name__ == "__main__":
+    # Adjust 'root_directory' if your repository root is different.
+    export_code_and_directory_list(root_directory=".", code_file="code.txt", list_file="directories.txt")
+
+
+# handlers/comment_handler.py
+# journalapi/handlers/comment_handler.py
+from journalapi import db
+from journalapi.models import Comment
+
+class CommentHandler:
+    @staticmethod
+    def add_comment(entry_id, user_id, content):
+        comment = Comment(journal_entry_id=entry_id, user_id=user_id, content=content)
+        db.session.add(comment)
+        db.session.commit()
+        db.session.refresh(comment)
+        return comment.to_dict()
+
+    @staticmethod
+    def get_comments(entry_id):
+        comments = Comment.query.filter_by(journal_entry_id=entry_id).all()
+        return [comment.to_dict() for comment in comments]
+
+    @staticmethod
+    def update_comment(comment_id, user_id, content):
+        comment = Comment.query.get(comment_id)
+        if comment and comment.user_id == user_id:
+            comment.content = content
+            db.session.commit()
+            db.session.refresh(comment)
+            return comment.to_dict()
+        return None
+
+    @staticmethod
+    def delete_comment(comment_id, user_id):
+        comment = Comment.query.get(comment_id)
+        if comment and comment.user_id == user_id:
+            db.session.delete(comment)
+            db.session.commit()
+            return True
+        return False
+
+
+# handlers/journal_entry_handler.py
+from journalapi import db
+from journalapi.models import JournalEntry
+from datetime import datetime, timezone
+import json
+
+class JournalEntryHandler:
+    @staticmethod
+    def create_entry(user_id, title, content, tags=None):
+        tags = tags or []
+        sentiment_score = 0.75
+        sentiment_tag = ["positive"]
+        new_entry = JournalEntry(
+            user_id=user_id,
+            title=title,
+            content=content,
+            tags=json.dumps(tags),
+            sentiment_score=sentiment_score,
+            sentiment_tag=json.dumps(sentiment_tag),
+            last_updated=datetime.now(timezone.utc)
+        )
+        db.session.add(new_entry)
+        db.session.commit()
+        return {"entry_id": new_entry.id}
+
+    @staticmethod
+    def get_entries(user_id):
+        entries = JournalEntry.query.filter_by(user_id=user_id).all()
+        return [entry.to_dict() for entry in entries]
+
+    @staticmethod
+    def get_entry(entry_id):
+        entry = JournalEntry.query.get(entry_id)
+        return entry.to_dict() if entry else None
+
+    @staticmethod
+    def update_entry(entry_id, title=None, content=None, tags=None):
+        entry = JournalEntry.query.get(entry_id)
+        if not entry:
+            return None
+        if title:
+            entry.title = title
+        if content:
+            entry.content = content
+        if tags is not None:
+            entry.tags = json.dumps(tags)
+        db.session.commit()
+        return entry.to_dict()
+
+    @staticmethod
+    def delete_entry(entry_id):
+        entry = JournalEntry.query.get(entry_id)
+        if entry:
+            db.session.delete(entry)
+            db.session.commit()
+            return True
+        return False
+
+
+# handlers/user_handler.py
+from journalapi import db
+from journalapi.models import User
+from werkzeug.security import generate_password_hash, check_password_hash
+
+class UserHandler:
+
+    @staticmethod
+    def register_user(username, email, password):
+        existing_user = User.query.filter_by(email=email).first()
+        if existing_user:
+            return None  # User already exists
+
+        hashed_password = generate_password_hash(password)
+        new_user = User(username=username, email=email, password=hashed_password)
+        db.session.add(new_user)
+        db.session.commit()
+        return new_user
+
+    @staticmethod
+    def login_user(email, password):
+        user = User.query.filter_by(email=email).first()
+        if user and check_password_hash(user.password, password):
+            return user
+        return None
+
+    @staticmethod
+    def get_user(user_id):
+        return User.query.get(user_id)
+
+    @staticmethod
+    def update_user(user_id, username=None, email=None, password=None):
+        user = User.query.get(user_id)
+        if not user:
+            return None
+
+        if username:
+            user.username = username
+        if email:
+            user.email = email
+        if password:
+            user.password = generate_password_hash(password)
+
+        db.session.commit()
+        return user
+
+    @staticmethod
+    def delete_user(user_id):
+        user = User.query.get(user_id)
+        if user:
+            db.session.delete(user)
+            db.session.commit()
+            return True
+        return False
+
+# models.py
+"""Database models for the Journal API."""
+from datetime import datetime
+import json
+from werkzeug.security import check_password_hash
+from extensions import db
+
+class User(db.Model):
+    """Represents a user in the Journal API."""
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password = db.Column(db.String(128), nullable=False)
+    entries = db.relationship("JournalEntry", backref="user", lazy=True)
+    comments = db.relationship("Comment", backref="user", lazy=True)
+
+    def __repr__(self):
+        """Return a string representation of the User."""
+        return f"<User {self.username}>"
+
+    def to_dict(self):
+        """Convert the User to a dictionary.
+        
+        Returns:
+            dict: User data as a dictionary.
+        """
+        return {
+            "id": self.id,
+            "username": self.username,
+            "email": self.email
+        }
+
+    def check_password(self, password):
+        """Check if the provided password matches the stored hash.
+        
+        Args:
+            password (str): The password to verify.
+        
+        Returns:
+            bool: True if the password matches, False otherwise.
+        """
+        return check_password_hash(self.password, password)
+
+class JournalEntry(db.Model):
+    """Represents a journal entry in the Journal API."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    title = db.Column(db.String(100), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    tags = db.Column(db.Text, nullable=True)
+    sentiment_score = db.Column(db.Float, nullable=True)
+    sentiment_tag = db.Column(db.Text, nullable=True)
+    last_updated = db.Column(db.DateTime, nullable=True)
+    comments = db.relationship("Comment", backref="journal_entry", lazy=True)
+    history = db.relationship("EditHistory", backref="journal_entry", lazy=True)
+
+    def __repr__(self):
+        """Return a string representation of the JournalEntry."""
+        return f"<JournalEntry {self.id}>"
+
+    def to_dict(self):
+        """Convert the JournalEntry to a dictionary.
+        
+        Returns:
+            dict: JournalEntry data as a dictionary.
+        """
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "title": self.title,
+            "content": self.content,
+            "tags": json.loads(self.tags) if self.tags else [],
+            "sentiment_score": self.sentiment_score,
+            "sentiment_tag": json.loads(self.sentiment_tag) if self.sentiment_tag else [],
+            "last_updated": self.last_updated.isoformat() if self.last_updated else None
+        }
+
+class Comment(db.Model):
+    """Represents a comment on a journal entry."""
+    id = db.Column(db.Integer, primary_key=True)
+    journal_entry_id = db.Column(db.Integer, db.ForeignKey("journal_entry.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        """Return a string representation of the Comment."""
+        return f"<Comment {self.id}>"
+
+    def to_dict(self):
+        """Convert the Comment to a dictionary.
+        
+        Returns:
+            dict: Comment data as a dictionary.
+        """
+        return {
+            "id": self.id,
+            "journal_entry_id": self.journal_entry_id,
+            "user_id": self.user_id,
+            "content": self.content,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None
+        }
+
+class EditHistory(db.Model):
+    """Tracks edit history for journal entries."""
+    id = db.Column(db.Integer, primary_key=True)
+    journal_entry_id = db.Column(db.Integer, db.ForeignKey("journal_entry.id"), nullable=False)
+    old_content = db.Column(db.Text, nullable=False)
+    edited_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        """Return a string representation of the EditHistory."""
+        return f"<EditHistory {self.id}>"
+
+    def to_dict(self):
+        """Convert the EditHistory to a dictionary.
+        
+        Returns:
+            dict: EditHistory data as a dictionary.
+        """
+        return {
+            "id": self.id,
+            "journal_entry_id": self.journal_entry_id,
+            "old_content": self.old_content,
+            "edited_at": self.edited_at.isoformat() if self.edited_at else None
+        }
+
+# resources/comment.py
+# journalapi/resources/comment.py
+"""Comment API resources for the Journal API."""
+from flask_restful import Resource
+from flask import request
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from marshmallow import ValidationError
+from journalapi.handlers.comment_handler import CommentHandler
+from journalapi.utils import json_response
+from journalapi.models import JournalEntry
+from schemas import CommentSchema
+
+comment_schema = CommentSchema()
+
+class CommentCollectionResource(Resource):
+    """Handle comment creation and listing for a journal entry."""
+    @jwt_required()
+    def get(self, entry_id: int):
+        """Retrieve all comments for a journal entry.
+        
+        Args:
+            entry_id: The ID of the journal entry.
+        
+        Returns:
+            Response: JSON response with list of comments.
+        """
+        if not JournalEntry.query.get(entry_id):
+            return json_response({"error": "Journal entry not found"}, 404)
+        comments = CommentHandler.get_comments(entry_id)
+        data = [
+            {
+                **c,
+                "_links": {
+                    "self": f"/journal_entries/{entry_id}/comments/{c['id']}",
+                    "edit": f"/journal_entries/{entry_id}/comments/{c['id']}",
+                    "delete": f"/journal_entries/{entry_id}/comments/{c['id']}"
+                }
+            } for c in comments
+        ]
+        return json_response(data, 200)
+
+    @jwt_required()
+    def post(self, entry_id: int):
+        """Create a new comment for a journal entry.
+        
+        Args:
+            entry_id: The ID of the journal entry.
+        
+        Returns:
+            Response: JSON response with created comment data.
+        """
+        if not JournalEntry.query.get(entry_id):
+            return json_response({"error": "Journal entry not found"}, 404)
+        try:
+            data = comment_schema.load(request.get_json())
+        except ValidationError as err:
+            return json_response({"errors": err.messages}, 422)
+        user_id = int(get_jwt_identity())
+        comment = CommentHandler.add_comment(entry_id, user_id, data["content"])
+        return json_response({"comment_id": comment["id"], "message": "Comment created successfully"}, 201)
+
+class CommentItemResource(Resource):
+    """Handle individual comment operations."""
+    @jwt_required()
+    def put(self, entry_id: int, comment_id: int):
+        """Update a comment by ID.
+        
+        Args:
+            entry_id: The ID of the journal entry.
+            comment_id: The ID of the comment.
+        
+        Returns:
+            Response: JSON response with success message or error.
+        """
+        if not JournalEntry.query.get(entry_id):
+            return json_response({"error": "Journal entry not found"}, 404)
+        try:
+            data = comment_schema.load(request.get_json())
+        except ValidationError as err:
+            return json_response({"errors": err.messages}, 422)
+        user_id = int(get_jwt_identity())
+        comment = CommentHandler.update_comment(comment_id, user_id, data["content"])
+        if not comment:
+            return json_response({"error": "Not found or unauthorized"}, 404)
+        return json_response({"message": "Comment fully replaced"}, 200)
+
+    @jwt_required()
+    def delete(self, entry_id: int, comment_id: int):
+        """Delete a comment by ID.
+        
+        Args:
+            entry_id: The ID of the journal entry.
+            comment_id: The ID of the comment.
+        
+        Returns:
+            Response: JSON response with success message or error.
+        """
+        if not JournalEntry.query.get(entry_id):
+            return json_response({"error": "Journal entry not found"}, 404)
+        user_id = int(get_jwt_identity())
+        if CommentHandler.delete_comment(comment_id, user_id):
+            return json_response({"message": "Comment deleted successfully"}, 200)
+        return json_response({"error": "Not found or unauthorized"}, 404)
+
+# resources/edit_history.py
+"""Edit history API resource for the Journal API."""
+from flask_restful import Resource
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from journalapi.models import EditHistory, JournalEntry
+from journalapi.utils import json_response
+
+class EditHistoryResource(Resource):
+    """Handle edit history retrieval for a journal entry."""
+    @jwt_required()
+    def get(self, entry_id: int):
+        """Retrieve edit history for a journal entry.
+        
+        Args:
+            entry_id: The ID of the journal entry.
+        
+        Returns:
+            Response: JSON response with edit history data or error.
+        """
+        user_id = int(get_jwt_identity())
+        entry = JournalEntry.query.get(entry_id)
+        if not entry:
+            return json_response({"error": "Journal entry not found"}, 404)
+        if entry.user_id != user_id:
+            return json_response({"error": "Unauthorized"}, 403)
+        history = EditHistory.query.filter_by(journal_entry_id=entry_id).all()
+        return json_response([h.to_dict() for h in history], 200)
+
+# resources/journal_entry.py
+"""Journal entry API resources for the Journal API."""
+from flask_restful import Resource
+from flask import request
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from marshmallow import ValidationError
+from journalapi.handlers.journal_entry_handler import JournalEntryHandler
+from journalapi.utils import json_response
+from journalapi.models import JournalEntry
+from schemas import JournalEntrySchema
+
+entry_schema = JournalEntrySchema()
+
+class JournalEntryListResource(Resource):
+    """Handle journal entry creation and listing."""
+    @jwt_required()
+    def get(self):
+        """Retrieve all journal entries for the current user.
+        
+        Returns:
+            Response: JSON response with list of entries.
+        """
+        user_id = int(get_jwt_identity())
+        entries = JournalEntryHandler.get_entries(user_id)
+        return json_response(entries, 200)
+
+    @jwt_required()
+    def post(self):
+        """Create a new journal entry.
+        
+        Returns:
+            Response: JSON response with created entry ID.
+        """
+        try:
+            data = entry_schema.load(request.get_json())
+        except ValidationError as err:
+            return json_response({"errors": err.messages}, 422)
+        user_id = int(get_jwt_identity())
+        result = JournalEntryHandler.create_entry(
+            user_id, data["title"], data["content"], data["tags"]
+        )
+        return json_response({"entry_id": result["entry_id"], "message": "Entry created successfully"}, 201)
+
+class JournalEntryResource(Resource):
+    """Handle individual journal entry operations."""
+    @jwt_required()
+    def get(self, entry_id: int):
+        """Retrieve a journal entry by ID.
+        
+        Args:
+            entry_id: The ID of the journal entry.
+        
+        Returns:
+            Response: JSON response with entry data or error.
+        """
+        entry = JournalEntryHandler.get_entry(entry_id)
+        if not entry:
+            return json_response({"error": "Entry not found"}, 404)
+        user_id = int(get_jwt_identity())
+        if entry["user_id"] != user_id:
+            return json_response({"error": "Unauthorized"}, 403)
+        return json_response(entry, 200)
+
+    @jwt_required()
+    def put(self, entry_id: int):
+        """Update a journal entry by ID.
+        
+        Args:
+            entry_id: The ID of the journal entry.
+        
+        Returns:
+            Response: JSON response with success message or error.
+        """
+        try:
+            data = entry_schema.load(request.get_json())
+        except ValidationError as err:
+            return json_response({"errors": err.messages}, 422)
+        user_id = int(get_jwt_identity())
+        entry = JournalEntryHandler.get_entry(entry_id)
+        if not entry:
+            return json_response({"error": "Entry not found"}, 404)
+        if entry["user_id"] != user_id:
+            return json_response({"error": "Unauthorized"}, 403)
+        updated = JournalEntryHandler.update_entry(
+            entry_id, data["title"], data["content"], data["tags"]
+        )
+        return json_response({"message": "Entry updated successfully"}, 200)
+
+    @jwt_required()
+    def delete(self, entry_id: int):
+        """Delete a journal entry by ID.
+        
+        Args:
+            entry_id: The ID of the journal entry.
+        
+        Returns:
+            Response: JSON response with success message or error.
+        """
+        user_id = int(get_jwt_identity())
+        entry = JournalEntryHandler.get_entry(entry_id)
+        if not entry:
+            return json_response({"error": "Entry not found"}, 404)
+        if entry["user_id"] != user_id:
+            return json_response({"error": "Unauthorized"}, 403)
+        if JournalEntryHandler.delete_entry(entry_id):
+            return json_response({"message": "Entry deleted successfully"}, 200)
+        return json_response({"error": "Failed to delete entry"}, 500)
+
+# resources/user.py
+"""User API resources for the Journal API."""
+from flask_restful import Resource
+from flask import request
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from marshmallow import ValidationError
+from journalapi.handlers.user_handler import UserHandler
+from journalapi.utils import json_response, generate_token
+from schemas import UserRegisterSchema, UserLoginSchema
+
+register_schema = UserRegisterSchema()
+login_schema = UserLoginSchema()
+
+class UserRegisterResource(Resource):
+    """Handle user registration."""
+    def post(self):
+        """Register a new user.
+        
+        Returns:
+            Response: JSON response with success message or error.
+        """
+        try:
+            data = register_schema.load(request.get_json())
+        except ValidationError as err:
+            return json_response({"errors": err.messages}, 422)
+        user = UserHandler.register_user(data["username"], data["email"], data["password"])
+        if not user:
+            return json_response({"error": "Email or username already registered"}, 400)
+        return json_response({"message": "User registered successfully"}, 201)
+
+class UserLoginResource(Resource):
+    """Handle user login."""
+    def post(self):
+        """Log in a user and return a JWT token.
+        
+        Returns:
+            Response: JSON response with token or error.
+        """
+        try:
+            data = login_schema.load(request.get_json())
+        except ValidationError as err:
+            return json_response({"errors": err.messages}, 422)
+        user = UserHandler.login_user(data["email"], data["password"])
+        if not user:
+            return json_response({"error": "Invalid credentials"}, 401)
+        token = generate_token(user)
+        return json_response({"token": token}, 200)
+
+class UserResource(Resource):
+    """Handle individual user operations."""
+    @jwt_required()
+    def get(self, user_id: int):
+        """Retrieve user data by ID.
+        
+        Args:
+            user_id: The ID of the user.
+        
+        Returns:
+            Response: JSON response with user data or error.
+        """
+        current_user_id = int(get_jwt_identity())
+        if user_id != current_user_id:
+            return json_response({"error": "Unauthorized"}, 403)
+        user = UserHandler.get_user(user_id)
+        if not user:
+            return json_response({"error": "User not found"}, 404)
+        return json_response(user.to_dict(), 200)
+
+    @jwt_required()
+    def put(self, user_id: int):
+        """Update user data by ID.
+        
+        Args:
+            user_id: The ID of the user.
+        
+        Returns:
+            Response: JSON response with success message or error.
+        """
+        current_user_id = int(get_jwt_identity())
+        if user_id != current_user_id:
+            return json_response({"error": "Unauthorized"}, 403)
+        try:
+            data = register_schema.load(request.get_json(), partial=True)
+        except ValidationError as err:
+            return json_response({"errors": err.messages}, 422)
+        user = UserHandler.update_user(
+            user_id,
+            username=data.get("username"),
+            email=data.get("email"),
+            password=data.get("password")
+        )
+        if not user:
+            return json_response({"error": "User not found"}, 404)
+        return json_response({"message": "User updated successfully"}, 200)
+
+    @jwt_required()
+    def delete(self, user_id: int):
+        """Delete a user by ID.
+        
+        Args:
+            user_id: The ID of the user.
+        
+        Returns:
+            Response: JSON response with success message or error.
+        """
+        current_user_id = int(get_jwt_identity())
+        if user_id != current_user_id:
+            return json_response({"error": "Unauthorized"}, 403)
+        if UserHandler.delete_user(user_id):
+            return json_response({"message": "User deleted successfully"}, 200)
+        return json_response({"error": "User not found"}, 404)
+
+# utils.py
+"""Utility functions for the Journal API."""
+import json
+import os
+from datetime import datetime, timedelta
+from typing import Any, Union
+import jwt
+from flask import Response
+from werkzeug.security import check_password_hash
+from journalapi.models import User
+
+def json_response(data: Any, status_code: int = 200) -> Response:
+    """Create a JSON response with the given data and status code.
+    
+    Args:
+        data: The data to serialize as JSON (dict, list, or str).
+        status_code: HTTP status code (default: 200).
+    
+    Returns:
+        Response: Flask Response object with JSON content.
+    """
+    return Response(
+        response=json.dumps(data),
+        status=status_code,
+        mimetype="application/json"
+    )
+
+def authenticate_user(username: str, password: str) -> Union[User, None]:
+    """Authenticate a user with the given credentials.
+    
+    Args:
+        username: The user's username.
+        password: The user's password.
+    
+    Returns:
+        User: The authenticated user object, or None if authentication fails.
+    """
+    user = User.query.filter_by(username=username).first()
+    if user and check_password_hash(user.password, password):
+        return user
+    return None
+
+def generate_token(user: User) -> str:
+    """Generate a JWT token for the given user.
+    
+    Args:
+        user: The user object to generate a token for.
+    
+    Returns:
+        str: The generated JWT token.
+    """
+    payload = {
+        "user_id": user.id,
+        "exp": datetime.utcnow() + timedelta(hours=24)
+    }
+    return jwt.encode(payload, os.getenv("JWT_SECRET_KEY", "secret_key"), algorithm="HS256")
+
