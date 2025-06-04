@@ -1,171 +1,147 @@
-"""Unit tests for CLI end-to-end flow."""
+"""Tests for CLI end-to-end flow."""
 import os
-import subprocess
-import unittest
-import re
+import pytest
 import time
-from client.config import TOKEN_FILE
+from typer.testing import CliRunner
+from unittest.mock import patch
+from client.main import app as cli_app
+from journalapi.models import User, JournalEntry, Comment
 
-class TestJournalCLIFlow(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        """Reset the database for a clean test environment."""
-        try:
-            subprocess.run(["python", "init_db.py"], check=True, capture_output=True, text=True)
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Failed to initialize database: {e.stderr}") from e
+def test_cli_end_to_end(client, app, db_session, tmp_path, monkeypatch):
+    """Test the full CLI workflow: register, login, create entry, comment, list.
+    
+    Args:
+        client: Flask test client.
+        app: Flask application instance.
+        db_session: SQLAlchemy database session.
+        tmp_path: Temporary directory for token file.
+        monkeypatch: Pytest monkeypatch fixture for mocking.
+    """
+    runner = CliRunner()
+    email = f"foo_{int(time.time())}@example.com"
+    token_file = tmp_path / ".journal_token"
+    os.environ["TOKEN_FILE"] = str(token_file)
 
-    def run_cli(self, command):
-        """Run a CLI command and return stdout and stderr as strings."""
-        env = os.environ.copy()
-        env["PYTHONPATH"] = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-        result = subprocess.run(
-            command,
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            env=env,
-        )
-        return result.stdout, result.stderr
+    # Mock requests to use test client
+    def mock_requests(method, url, **kwargs):
+        class MockResponse:
+            def __init__(self, response):
+                self.status_code = response.status_code
+                self.json_data = response.json()
+            def json(self):
+                return self.json_data
 
-    def test_cli_end_to_end(self):
-        """Test the full CLI workflow: register, login, create entry, comment, and list."""
-        email = f"foo_{int(time.time())}@example.com"
+        if method.lower() == "post":
+            response = client.post(url.replace("http://localhost:5000", ""), json=kwargs.get("json"), headers=kwargs.get("headers"))
+        elif method.lower() == "get":
+            response = client.get(url.replace("http://localhost:5000", ""), headers=kwargs.get("headers"))
+        elif method.lower() == "put":
+            response = client.put(url.replace("http://localhost:5000", ""), json=kwargs.get("json"), headers=kwargs.get("headers"))
+        elif method.lower() == "delete":
+            response = client.delete(url.replace("http://localhost:5000", ""), headers=kwargs.get("headers"))
+        return MockResponse(response)
 
-        # 1. Register a new user
-        out, err = self.run_cli(
-            f'python client/main.py auth register --username foo --email {email} --password testpass123'
-        )
-        print("DEBUG [register] stdout:", out)
-        print("DEBUG [register] stderr:", err)
-        self.assertIn("✅", out or err, f"Registration failed: stdout: {out}, stderr: {err}")
+    with patch("requests.post", side_effect=mock_requests), \
+         patch("requests.get", side_effect=mock_requests), \
+         patch("requests.put", side_effect=mock_requests), \
+         patch("requests.delete", side_effect=mock_requests):
 
-        # 2. Login
-        out, err = self.run_cli(
-            f'python client/main.py auth login --email {email} --password testpass123'
-        )
-        print("DEBUG [login] stdout:", out)
-        print("DEBUG [login] stderr:", err)
-        self.assertIn("✅ Logged in", out or err, f"Login failed: stdout: {out}, stderr: {err}")
-        self.assertTrue(os.path.exists(TOKEN_FILE), "Token file not found after login.")
+        # Register
+        result = runner.invoke(cli_app, [
+            "auth", "register",
+            "--username", "foo",
+            "--email", email,
+            "--password", "testpass123"
+        ])
+        assert result.exit_code == 0
+        assert "✅ Registered!" in result.output
 
-        # 3. Create a journal entry
-        out, err = self.run_cli(
-            'python client/main.py entry create "First Post" "This is my first journal." --tags "test,cli"'
-        )
-        print("DEBUG [create_entry] stdout:", out)
-        print("DEBUG [create_entry] stderr:", err)
-        self.assertIn("✅", out or err, f"Entry creation failed: stdout: {out}, stderr: {err}")
+        # Invalid registration (duplicate email)
+        result = runner.invoke(cli_app, [
+            "auth", "register",
+            "--username", "foo2",
+            "--email", email,
+            "--password", "testpass123"
+        ])
+        assert result.exit_code == 0
+        assert "Validation Error" in result.output
 
-        # 4. List entries and extract entry ID
-        out, err = self.run_cli("python client/main.py entry list")
-        print("DEBUG [list_entries] stdout:", out)
-        print("DEBUG [list_entries] stderr:", err)
-        self.assertIn("First Post", out, f"Entry list output did not include entry title: {out}")
-        lines = out.strip().splitlines()
-        entry_line = next((line for line in lines if "First Post" in line), None)
-        self.assertIsNotNone(entry_line, "No entry line found in output.")
-        match = re.search(r"\[(\d+)\]", entry_line)
-        self.assertIsNotNone(match, "Could not extract entry ID from line: " + entry_line)
-        entry_id = match.group(1)
+        # Login
+        result = runner.invoke(cli_app, [
+            "auth", "login",
+            "--email", email,
+            "--password", "testpass123"
+        ])
+        assert result.exit_code == 0
+        assert "✅ Logged in" in result.output
+        assert token_file.exists()
 
-        # 5. Add a comment to the entry
-        out, err = self.run_cli(f'python client/main.py comment add {entry_id} "hello!"')
-        print("DEBUG [add_comment] stdout:", out)
-        print("DEBUG [add_comment] stderr:", err)
-        self.assertIn("✅", out or err, f"Comment add failed: stdout: {out}, stderr: {err}")
+        # Invalid login
+        result = runner.invoke(cli_app, [
+            "auth", "login",
+            "--email", email,
+            "--password", "wrongpassword"
+        ])
+        assert result.exit_code == 0
+        assert "Login failed" in result.output
 
-        # 6. List comments and verify the comment exists
-        out, err = self.run_cli(f"python client/main.py comment list {entry_id}")
-        print("DEBUG [list_comments] stdout:", out)
-        print("DEBUG [list_comments] stderr:", err)
-        self.assertIn("hello!", out, f"Comment 'hello!' not found in output: {out}")
+        # Create entry
+        result = runner.invoke(cli_app, [
+            "entry", "create",
+            "First Post", "This is my first journal.",
+            "--tags", "test,cli"
+        ])
+        assert result.exit_code == 0
+        assert "✅ Entry created successfully!" in result.output
 
-    @classmethod
-    def tearDownClass(cls):
-        """Clean up token file after tests."""
-        if os.path.exists(TOKEN_FILE):
-            os.remove(TOKEN_FILE)
+        # Invalid entry (empty title)
+        result = runner.invoke(cli_app, [
+            "entry", "create",
+            "", "Invalid entry.",
+            "--tags", "invalid"
+        ])
+        assert result.exit_code == 1
 
-if __name__ == "__main__":
-    unittest.main()
+        # List entries
+        result = runner.invoke(cli_app, ["entry", "list"])
+        assert result.exit_code == 0
+        assert "First Post" in result.output
 
-# # tests/test_cli_flow.py
-# import os
-# import subprocess
-# import unittest
-# import re
-# import time
-# from client.config import TOKEN_FILE
+        # Extract entry ID
+        with app.app_context():
+            user = db_session.session.query(User).filter_by(email=email).first()
+            entry = user.entries[0]
+            entry_id = entry.id
 
-# class TestJournalCLIFlow(unittest.TestCase):
-#     @classmethod
-#     def setUpClass(cls):
-#         # Reset the database for a clean test environment.
-#         subprocess.run(["python", "init_db.py"], check=True)
+        # Add comment
+        result = runner.invoke(cli_app, ["comment", "add", str(entry_id), "hello!"])
+        assert result.exit_code == 0
+        assert "✅ Comment added" in result.output
 
-#     def run_cli(self, command):
-#         """
-#         Run a CLI command and return stdout and stderr as strings.
-#         """
-#         result = subprocess.run(
-#             command,
-#             stdout=subprocess.PIPE,
-#             stderr=subprocess.PIPE,
-#             shell=True,
-#             env=dict(os.environ, PYTHONPATH="."),
-#         )
-#         return result.stdout.decode(), result.stderr.decode()
+        # Invalid comment (empty content)
+        result = runner.invoke(cli_app, ["comment", "add", str(entry_id), ""])
+        assert result.exit_code == 0
+        assert "Validation Error" in result.output
 
-#     def test_cli_end_to_end(self):
-#         # Use a dynamic email to avoid duplicate user conflicts.
-#         email = f"foo_{int(time.time())}@example.com"
+        # List comments
+        result = runner.invoke(cli_app, ["comment", "list", str(entry_id)])
+        assert result.exit_code == 0
+        assert "hello!" in result.output
 
-#         # 1. Register a new user
-#         out, err = self.run_cli(
-#             f'python client/main.py auth register --username foo --email {email} --password testpass123'
-#         )
-#         self.assertIn("✅", out or err, f"Registration failed: stdout: {out}, stderr: {err}")
+        # Non-existent entry
+        result = runner.invoke(cli_app, ["comment", "list", str(entry_id + 1)])
+        assert result.exit_code == 0
+        assert "not found" in result.output.lower()
 
-#         # 2. Login
-#         out, err = self.run_cli(
-#             f'python client/main.py auth login --email {email} --password testpass123'
-#         )
-#         self.assertIn("✅ Logged in", out or err, f"Login failed: stdout: {out}, stderr: {err}")
-#         self.assertTrue(os.path.exists(TOKEN_FILE), "Token file not found after login.")
+        # Delete entry
+        result = runner.invoke(cli_app, ["entry", "delete", str(entry_id)])
+        assert result.exit_code == 0
+        assert "✅ Entry deleted successfully" in result.output
+        with app.app_context():
+            assert db_session.session.query(JournalEntry).get(entry_id) is None
 
-#         # 3. Create a journal entry
-#         out, err = self.run_cli(
-#             'python client/main.py entry create "First Post" "This is my first journal." --tags "test,cli"'
-#         )
-#         self.assertIn("✅", out or err, f"Entry creation failed: stdout: {out}, stderr: {err}")
-
-#         # 4. List entries and extract entry ID
-#         out, err = self.run_cli("python client/main.py entry list")
-#         self.assertIn("First Post", out, f"Entry list output did not include entry title: {out}")
-#         lines = out.strip().splitlines()
-#         entry_line = next((line for line in lines if "First Post" in line), None)
-#         self.assertIsNotNone(entry_line, "No entry line found in output.")
-#         match = re.search(r"\[(\d+)\]", entry_line)
-#         self.assertIsNotNone(match, "Could not extract entry ID from line: " + entry_line)
-#         entry_id = match.group(1)
-
-#         # 5. Add a comment to the entry (using positional arguments)
-#         out, err = self.run_cli(f'python client/main.py comment add {entry_id} "hello!"')
-#         self.assertIn("✅", out or err, f"Comment add failed: stdout: {out}, stderr: {err}")
-
-#         # 6. List comments and verify the comment exists (using the positional parameter for entry_id)
-#         out, err = self.run_cli(f"python client/main.py comment list {entry_id}")
-#         print("DEBUG: comment list stdout →", repr(out))
-#         print("DEBUG: comment list stderr →", repr(err))
-#         self.assertIn("hello!", out, f"Comment 'hello!' not found in output: {out}")
-
-#     @classmethod
-#     def tearDownClass(cls):
-#         # Clean up token file after tests run.
-#         if os.path.exists(TOKEN_FILE):
-#             os.remove(TOKEN_FILE)
-
-# if __name__ == "__main__":
-#     unittest.main()
+        # Logout
+        result = runner.invoke(cli_app, ["auth", "logout"])
+        assert result.exit_code == 0
+        assert "🔓 Logged out" in result.output
+        assert not token_file.exists()

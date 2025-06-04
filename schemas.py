@@ -1,51 +1,23 @@
-"""Marshmallow schemas for the Journal API."""
+"""Marshmallow schemas for validating API payloads."""
 from marshmallow import Schema, fields, validate
 
-class CommentSchema(Schema):
-    """Schema for validating comment data."""
-    content = fields.Str(required=True, validate=validate.Length(min=1))
-
-class JournalEntrySchema(Schema):
-    """Schema for validating journal entry data."""
-    title = fields.Str(required=True, validate=validate.Length(min=1, max=100))
-    content = fields.Str(required=True, validate=validate.Length(min=1))
-    tags = fields.List(fields.Str(), missing=[])
-
 class UserRegisterSchema(Schema):
-    """Schema for validating user registration data."""
-    username = fields.Str(required=True, validate=validate.Length(min=3, max=80))
+    """Schema for user registration payload."""
+    username = fields.Str(required=True, validate=validate.Length(min=3, max=50))
     email = fields.Email(required=True)
-    password = fields.Str(required=True, validate=validate.Length(min=6), load_only=True)
+    password = fields.Str(required=True, validate=validate.Length(min=6))
 
 class UserLoginSchema(Schema):
-    """Schema for validating user login data."""
+    """Schema for user login payload."""
     email = fields.Email(required=True)
-    password = fields.Str(required=True, load_only=True)
+    password = fields.Str(required=True)
 
-# # schemas.py
-# from marshmallow import Schema, fields, validate, EXCLUDE
+class JournalEntrySchema(Schema):
+    """Schema for journal entry payload."""
+    title = fields.Str(required=True, validate=validate.Length(min=1, max=100))
+    content = fields.Str(required=True, validate=validate.Length(min=1))
+    tags = fields.List(fields.Str(), required=False, load_default=[])
 
-# class UserRegisterSchema(Schema):
-#     class Meta:
-#         unknown = EXCLUDE
-#     username = fields.Str(required=True, validate=validate.Length(min=1))
-#     email = fields.Email(required=True)
-#     password = fields.Str(required=True, validate=validate.Length(min=6))
-
-# class UserLoginSchema(Schema):
-#     class Meta:
-#         unknown = EXCLUDE
-#     email = fields.Email(required=True)
-#     password = fields.Str(required=True)
-
-# class JournalEntrySchema(Schema):
-#     class Meta:
-#         unknown = EXCLUDE
-#     title = fields.Str(required=True)
-#     content = fields.Str(required=True)
-#     tags = fields.List(fields.Str(), required=True)
-
-# class CommentSchema(Schema):
-#     class Meta:
-#         unknown = EXCLUDE
-#     content = fields.Str(required=True, validate=validate.Length(min=1))
+class CommentSchema(Schema):
+    """Schema for comment payload."""
+    content = fields.Str(required=True, validate=validate.Length(min=1, max=500))

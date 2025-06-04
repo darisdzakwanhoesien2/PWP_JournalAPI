@@ -1,75 +1,51 @@
-# PWP_JournalAPI/client/auth_cli.py
+"""CLI commands for authentication."""
 import typer
 import requests
-from rich import print
-import auth, config  # from client
+from rich import print as rprint
+from client import auth, config
 
-auth_app = typer.Typer(help="Authentication commands")
+auth_app = typer.Typer(name="auth")
 
-@auth_app.command("register")
+@auth_app.command()
 def register(
-    username: str = typer.Option(..., "--username", "-u", help="Your desired username"),
-    email: str = typer.Option(..., "--email", "-e", help="Your email address"),
-    password: str = typer.Option(..., "--password", "-p", hide_input=True, help="Your password")
+    username: str = typer.Option(..., prompt=True),
+    email: str = typer.Option(..., prompt=True),
+    password: str = typer.Option(..., prompt=True, hide_input=True)
 ):
-    """
-    Register a new user with username, email, and password.
-    Handles validation and server errors cleanly.
-    """
-    res = requests.post(f"{config.API_URL}/users/register", json={
-        "username": username,
-        "email": email,
-        "password": password
-    })
+    """Register a new user."""
+    try:
+        response = requests.post(
+            f"{config.API_URL}/users/register",
+            json={"username": username, "email": email, "password": password}
+        )
+        response.raise_for_status()
+        rprint("[green]✅ Registered![/green]")
+    except requests.exceptions.HTTPError as e:
+        rprint(f"[red]❌ Registration failed: {e.response.json()['error']}[/red]")
 
-    if res.status_code == 201:
-        print("[green]✅ Registered![/green]")
-    else:
-        try:
-            err = res.json()
-            if "errors" in err:
-                print(f"[red]❌ Validation Error: {err['errors']}[/red]")
-            elif "error" in err:
-                print(f"[red]❌ {err['error']}[/red]")
-            else:
-                print(f"[red]❌ Unexpected response: {err}[/red]")
-        except Exception:
-            print(f"[red]❌ Server error: {res.text}[/red]")
-
-
-@auth_app.command("login")
+@auth_app.command()
 def login(
-    email: str = typer.Option(..., "--email", "-e", help="Your email"),
-    password: str = typer.Option(..., "--password", "-p", hide_input=True, help="Your password")
+    email: str = typer.Option(..., prompt=True),
+    password: str = typer.Option(..., prompt=True, hide_input=True)
 ):
-    """
-    Log in and store the JWT token.
-    """
-    res = requests.post(f"{config.API_URL}/users/login", json={"email": email, "password": password})
-    if res.ok:
-        auth.save_token(res.json()["token"])
-        print("[green]✅ Logged in[/green]")
-    else:
-        try:
-            err = res.json()
-            print(f"[red]❌ Login failed: {err.get('error', err)}[/red]")
-        except Exception:
-            print(f"[red]❌ Server error: {res.text}[/red]")
+    """Log in and save token."""
+    try:
+        response = requests.post(
+            f"{config.API_URL}/users/login",
+            json={"email": email, "password": password}
+        )
+        response.raise_for_status()
+        token = response.json()["token"]
+        auth.save_token(token)
+        rprint("[green]✅ Logged in[/green]")
+    except requests.exceptions.HTTPError as e:
+        rprint(f"[red]❌ Login failed: {e.response.json()['error']}[/red]")
 
-
-@auth_app.command("logout")
+@auth_app.command()
 def logout():
-    """
-    Remove saved token (logout).
-    """
-    auth.clear_token()
-    print("[yellow]🔓 Logged out[/yellow]")
-
-
-@auth_app.command("me")
-def me():
-    """
-    Check if you're logged in.
-    """
-    token = auth.get_token()
-    print("[green]🔐 Logged in[/green]" if token else "[red]🔓 Not logged in[/red]")
+    """Log out and remove token."""
+    if auth.get_token():
+        auth.remove_token()
+        rprint("[green]🔓 Logged out[/green]")
+    else:
+        rprint("[yellow]⚠️ Not logged in[/yellow]")

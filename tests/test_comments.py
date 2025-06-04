@@ -1,274 +1,171 @@
-"""Unit tests for comment-related API routes."""
-import sys
-import os
-import unittest
+"""Tests for comment-related API routes."""
+import pytest
+from journalapi.models import User, JournalEntry, Comment
 from werkzeug.security import generate_password_hash
-from flask_jwt_extended import create_access_token
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from journalapi import create_app
-from extensions import db
-from journalapi.models import User, Comment, JournalEntry
-
-class TestCommentRoutes(unittest.TestCase):
-    def setUp(self):
-        """Set up a fresh in-memory DB, add a test user & entry, and log in the user."""
-        self.app = create_app({
-            "TESTING": True,
-            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"
-        })
-        self.client = self.app.test_client()
-
-        with self.app.app_context():
-            # Import models before creating tables
-            db.create_all()
-
-            hashed_password = generate_password_hash("password123")
-            user = User(username="testuser", email="test@example.com", password=hashed_password)
-            db.session.add(user)
-            db.session.commit()
-
-            self.user_id = user.id
-            self.token = create_access_token(identity=str(user.id))
-
-            # Create a test journal entry
-            entry = JournalEntry(
-                user_id=self.user_id,
-                title="Test Entry",
-                content="Some test content"
-            )
-            db.session.add(entry)
-            db.session.commit()
-            self.entry_id = entry.id
-
-    def tearDown(self):
-        """Clean up the database after each test."""
-        with self.app.app_context():
-            db.drop_all()
-
-    def test_add_comment(self):
-        """Test adding a comment to a journal entry."""
-        response = self.client.post(
-            f"/api/journal_entries/{self.entry_id}/comments",
+def test_add_comment(client, auth_headers: dict, app, db_session):
+    """Test adding a comment to a journal entry."""
+    with app.app_context():
+        user = db_session.session.query(User).first()
+        entry = JournalEntry(user_id=user.id, title="Test Entry", content="Content")
+        db_session.session.add(entry)
+        db_session.session.commit()
+        # Valid comment
+        response = client.post(
+            f"/api/journal_entries/{entry.id}/comments",
             json={"content": "This is a test comment."},
-            headers={"Authorization": f"Bearer {self.token}"}
+            headers=auth_headers
         )
-        print("DEBUG [test_add_comment] response JSON:", response.get_json())
-        print("DEBUG [test_add_comment] status code:", response.status_code)
-
-        self.assertEqual(response.status_code, 201)
-        data = response.get_json()
-        self.assertIn("comment_id", data)
-
-    def test_get_comments(self):
-        """Test retrieving comments for a journal entry."""
-        create_resp = self.client.post(
-            f"/api/journal_entries/{self.entry_id}/comments",
-            json={"content": "This is a test comment."},
-            headers={"Authorization": f"Bearer {self.token}"}
+        assert response.status_code == 201
+        assert "comment_id" in response.json
+        comment = db_session.session.query(Comment).get(response.json["comment_id"])
+        assert comment.content == "This is a test comment."
+        # Invalid comment (empty content)
+        response = client.post(
+            f"/api/journal_entries/{entry.id}/comments",
+            json={"content": ""},
+            headers=auth_headers
         )
-        self.assertEqual(create_resp.status_code, 201)
-
-        response = self.client.get(
-            f"/api/journal_entries/{self.entry_id}/comments",
-            headers={"Authorization": f"Bearer {self.token}"}
+        assert response.status_code == 422
+        assert "errors" in response.json
+        # Non-existent entry
+        response = client.post(
+            f"/api/journal_entries/{entry.id + 1}/comments",
+            json={"content": "Invalid entry"},
+            headers=auth_headers
         )
-        print("DEBUG [test_get_comments] response JSON:", response.get_json())
-        print("DEBUG [test_get_comments] status code:", response.status_code)
+        assert response.status_code == 404
 
-        self.assertEqual(response.status_code, 200)
-        data = response.get_json()
-        self.assertGreater(len(data), 0)
-        self.assertIn("content", data[0])
-
-    def test_update_comment(self):
-        """Test updating a comment."""
-        create_resp = self.client.post(
-            f"/api/journal_entries/{self.entry_id}/comments",
-            json={"content": "Original Comment"},
-            headers={"Authorization": f"Bearer {self.token}"}
+def test_get_comments(client, auth_headers: dict, app, db_session):
+    """Test retrieving comments for a journal entry."""
+    with app.app_context():
+        user = db_session.session.query(User).first()
+        entry = JournalEntry(user_id=user.id, title="Test Entry", content="Content")
+        db_session.session.add(entry)
+        db_session.session.commit()
+        comment = Comment(journal_entry_id=entry.id, user_id=user.id, content="Test comment")
+        db_session.session.add(comment)
+        db_session.session.commit()
+        # Valid retrieval
+        response = client.get(
+            f"/api/journal_entries/{entry.id}/comments",
+            headers=auth_headers
         )
-        self.assertEqual(create_resp.status_code, 201)
-        comment_id = create_resp.get_json()["comment_id"]
+        assert response.status_code == 200
+        assert len(response.json) == 1
+        assert response.json[0]["content"] == "Test comment"
+        assert "_links" in response.json[0]
+        # Non-existent entry
+        response = client.get(
+            f"/api/journal_entries/{entry.id + 1}/comments",
+            headers=auth_headers
+        )
+        assert response.status_code == 404
+        # Empty comments
+        new_entry = JournalEntry(user_id=user.id, title="Empty Entry", content="No comments")
+        db_session.session.add(new_entry)
+        db_session.session.commit()
+        response = client.get(
+            f"/api/journal_entries/{new_entry.id}/comments",
+            headers=auth_headers
+        )
+        assert response.status_code == 200
+        assert response.json == []
 
-        update_resp = self.client.put(
-            f"/api/journal_entries/{self.entry_id}/comments/{comment_id}",
+def test_update_comment(client, auth_headers: dict, app, db_session):
+    """Test updating a comment."""
+    with app.app_context():
+        user = db_session.session.query(User).first()
+        entry = JournalEntry(user_id=user.id, title="Test Entry", content="Content")
+        db_session.session.add(entry)
+        db_session.session.commit()
+        comment = Comment(journal_entry_id=entry.id, user_id=user.id, content="Original")
+        db_session.session.add(comment)
+        db_session.session.commit()
+        # Valid update
+        response = client.put(
+            f"/api/journal_entries/{entry.id}/comments/{comment.id}",
             json={"content": "Updated Comment"},
-            headers={"Authorization": f"Bearer {self.token}"}
+            headers=auth_headers
         )
-        print("DEBUG [test_update_comment] response JSON:", update_resp.get_json())
-        print("DEBUG [test_update_comment] status code:", update_resp.status_code)
-
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("fully replaced", update_resp.get_json()["message"].lower())
-
-    def test_delete_comment(self):
-        """Test deleting a comment."""
-        create_resp = self.client.post(
-            f"/api/journal_entries/{self.entry_id}/comments",
-            json={"content": "Comment to be deleted"},
-            headers={"Authorization": f"Bearer {self.token}"}
+        assert response.status_code == 200
+        assert "fully replaced" in response.json["message"].lower()
+        updated_comment = db_session.session.query(Comment).get(comment.id)
+        assert updated_comment.content == "Updated Comment"
+        # Invalid update (empty content)
+        response = client.put(
+            f"/api/journal_entries/{entry.id}/comments/{comment.id}",
+            json={"content": ""},
+            headers=auth_headers
         )
-        self.assertEqual(create_resp.status_code, 201)
-        comment_id = create_resp.get_json()["comment_id"]
-
-        delete_resp = self.client.delete(
-            f"/api/journal_entries/{self.entry_id}/comments/{comment_id}",
-            headers={"Authorization": f"Bearer {self.token}"}
+        assert response.status_code == 422
+        # Non-existent comment
+        response = client.put(
+            f"/api/journal_entries/{entry.id}/comments/{comment.id + 1}",
+            json={"content": "Invalid"},
+            headers=auth_headers
         )
-        print("DEBUG [test_delete_comment] response JSON:", delete_resp.get_json())
-        print("DEBUG [test_delete_comment] status code:", delete_resp.status_code)
-
-        self.assertEqual(delete_resp.status_code, 200)
-        self.assertIn("deleted", delete_resp.get_json()["message"].lower())
-
-        # Verify comment is gone
-        get_resp = self.client.get(
-            f"/api/journal_entries/{self.entry_id}/comments",
-            headers={"Authorization": f"Bearer {self.token}"}
+        assert response.status_code == 404
+        # Unauthorized update
+        other_user = User(
+            username="otheruser",
+            email="other@example.com",
+            password=generate_password_hash("password123")
         )
-        self.assertEqual(get_resp.status_code, 200)
-        data = get_resp.get_json()
-        self.assertFalse(any(c["id"] == comment_id for c in data))
+        db_session.session.add(other_user)
+        db_session.session.commit()
+        other_token = client.post("/api/users/login", json={
+            "email": "other@example.com",
+            "password": "password123"
+        }).json["token"]
+        response = client.put(
+            f"/api/journal_entries/{entry.id}/comments/{comment.id}",
+            json={"content": "Unauthorized"},
+            headers={"Authorization": f"Bearer {other_token}"}
+        )
+        assert response.status_code == 404
 
-if __name__ == "__main__":
-    unittest.main()
-    
-# # PWP_JournalAPI/tests/test_comments.py
-
-# import sys
-# import os
-# import unittest
-# from werkzeug.security import generate_password_hash
-# from flask_jwt_extended import create_access_token
-
-# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-# from app import create_app
-# from extensions import db
-# from journalapi.models import User, Comment, JournalEntry
-
-# class TestCommentRoutes(unittest.TestCase):
-#     def setUp(self):
-#         """
-#         Creates a fresh in-memory DB, adds a test user & entry,
-#         and logs that user in with create_access_token(...).
-#         """
-#         self.app = create_app({
-#             "TESTING": True,
-#             "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"
-#         })
-#         self.client = self.app.test_client()
-
-#         with self.app.app_context():
-#             db.create_all()
-
-#             hashed_password = generate_password_hash("password123")
-#             user = User(username="testuser", email="test@example.com", password=hashed_password)
-#             db.session.add(user)
-#             db.session.commit()
-
-#             self.user_id = user.id
-#             # IMPORTANT: use str(...) for the identity
-#             self.token = create_access_token(identity=str(user.id))
-
-#             # Create a test journal entry
-#             entry = JournalEntry(
-#                 user_id=self.user_id,
-#                 title="Test Entry",
-#                 content="Some test content"
-#             )
-#             db.session.add(entry)
-#             db.session.commit()
-#             self.entry_id = entry.id
-
-#     def tearDown(self):
-#         with self.app.app_context():
-#             db.drop_all()
-
-#     def test_add_comment(self):
-#         response = self.client.post(
-#             f"/entries/{self.entry_id}/comments",
-#             json={"content": "This is a test comment."},
-#             headers={"Authorization": f"Bearer {self.token}"}
-#         )
-#         print("DEBUG [test_add_comment] response JSON:", response.get_json())
-#         print("DEBUG [test_add_comment] status code:", response.status_code)
-
-#         self.assertEqual(response.status_code, 201)
-#         data = response.get_json()
-#         self.assertIn("comment_id", data)
-
-#     def test_get_comments(self):
-#         # create a comment
-#         create_resp = self.client.post(
-#             f"/entries/{self.entry_id}/comments",
-#             json={"content": "This is a test comment."},
-#             headers={"Authorization": f"Bearer {self.token}"}
-#         )
-#         self.assertEqual(create_resp.status_code, 201)
-
-#         response = self.client.get(
-#             f"/entries/{self.entry_id}/comments",
-#             headers={"Authorization": f"Bearer {self.token}"}
-#         )
-#         print("DEBUG [test_get_comments] response JSON:", response.get_json())
-#         print("DEBUG [test_get_comments] status code:", response.status_code)
-
-#         self.assertEqual(response.status_code, 200)
-#         data = response.get_json()
-#         self.assertGreater(len(data), 0)
-#         self.assertIn("content", data[0])
-
-#     def test_update_comment(self):
-#         create_resp = self.client.post(
-#             f"/entries/{self.entry_id}/comments",
-#             json={"content": "Original Comment"},
-#             headers={"Authorization": f"Bearer {self.token}"}
-#         )
-#         self.assertEqual(create_resp.status_code, 201)
-#         comment_id = create_resp.get_json()["comment_id"]
-
-#         update_resp = self.client.put(
-#             f"/entries/{self.entry_id}/comments/{comment_id}",
-#             json={"content": "Updated Comment"},
-#             headers={"Authorization": f"Bearer {self.token}"}
-#         )
-#         print("DEBUG [test_update_comment] response JSON:", update_resp.get_json())
-#         print("DEBUG [test_update_comment] status code:", update_resp.status_code)
-
-#         self.assertEqual(update_resp.status_code, 200)
-#         self.assertIn("fully replaced", update_resp.get_json()["message"].lower())
-
-#     def test_delete_comment(self):
-#         create_resp = self.client.post(
-#             f"/entries/{self.entry_id}/comments",
-#             json={"content": "Comment to be deleted"},
-#             headers={"Authorization": f"Bearer {self.token}"}
-#         )
-#         self.assertEqual(create_resp.status_code, 201)
-#         comment_id = create_resp.get_json()["comment_id"]
-
-#         delete_resp = self.client.delete(
-#             f"/entries/{self.entry_id}/comments/{comment_id}",
-#             headers={"Authorization": f"Bearer {self.token}"}
-#         )
-#         print("DEBUG [test_delete_comment] response JSON:", delete_resp.get_json())
-#         print("DEBUG [test_delete_comment] status code:", delete_resp.status_code)
-
-#         self.assertEqual(delete_resp.status_code, 200)
-#         self.assertIn("deleted", delete_resp.get_json()["message"].lower())
-
-#         # verify gone
-#         get_resp = self.client.get(
-#             f"/entries/{self.entry_id}/comments",
-#             headers={"Authorization": f"Bearer {self.token}"}
-#         )
-#         self.assertEqual(get_resp.status_code, 200)
-#         data = get_resp.get_json()
-#         self.assertFalse(any(c["id"] == comment_id for c in data))
-
-# if __name__ == "__main__":
-#     unittest.main()
-
+def test_delete_comment(client, auth_headers: dict, app, db_session):
+    """Test deleting a comment."""
+    with app.app_context():
+        user = db_session.session.query(User).first()
+        entry = JournalEntry(user_id=user.id, title="Test Entry", content="Content")
+        db_session.session.add(entry)
+        db_session.session.commit()
+        comment = Comment(journal_entry_id=entry.id, user_id=user.id, content="To delete")
+        db_session.session.add(comment)
+        db_session.session.commit()
+        # Valid deletion
+        response = client.delete(
+            f"/api/journal_entries/{entry.id}/comments/{comment.id}",
+            headers=auth_headers
+        )
+        assert response.status_code == 200
+        assert "deleted" in response.json["message"].lower()
+        assert db_session.session.query(Comment).get(comment.id) is None
+        # Non-existent comment
+        response = client.delete(
+            f"/api/journal_entries/{entry.id}/comments/{comment.id + 1}",
+            headers=auth_headers
+        )
+        assert response.status_code == 404
+        # Unauthorized deletion
+        other_user = User(
+            username="otheruser",
+            email="other@example.com",
+            password=generate_password_hash("password123")
+        )
+        db_session.session.add(other_user)
+        db_session.session.commit()
+        other_token = client.post("/api/users/login", json={
+            "email": "other@example.com",
+            "password": "password123"
+        }).json["token"]
+        other_comment = Comment(journal_entry_id=entry.id, user_id=user.id, content="Other")
+        db_session.session.add(other_comment)
+        db_session.session.commit()
+        response = client.delete(
+            f"/api/journal_entries/{entry.id}/comments/{other_comment.id}",
+            headers={"Authorization": f"Bearer {other_token}"}
+        )
+        assert response.status_code == 404

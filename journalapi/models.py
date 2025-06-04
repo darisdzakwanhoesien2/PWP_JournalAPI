@@ -121,4 +121,5 @@ class EditHistory(db.Model):
             "id": self.id,
             "journal_entry_id": self.journal_entry_id,
             "old_content": self.old_content,
-            "edited_at": self.edited_at.isoformat() if self.edited_at else None}
+            "edited_at": self.edited_at.isoformat() if self.edited_at else None
+        }
