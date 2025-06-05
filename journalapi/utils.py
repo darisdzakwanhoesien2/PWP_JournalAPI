@@ -1,11 +1,9 @@
 """Utility functions for the Journal API."""
 import json
-import os
-from datetime import datetime, timedelta
 from typing import Any, Union
-import jwt
 from flask import Response
 from werkzeug.security import check_password_hash
+from flask_jwt_extended import create_access_token
 from journalapi.models import User
 
 def json_response(data: Any, status_code: int = 200) -> Response:
@@ -48,5 +46,4 @@ def generate_token(user: User) -> str:
     Returns:
         str: The generated JWT token.
     """
-    from flask_jwt_extended import create_access_token
     return create_access_token(identity=str(user.id))
