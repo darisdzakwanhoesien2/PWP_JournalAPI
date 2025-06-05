@@ -60,9 +60,16 @@ class UserResource(Resource):
         user = UserHandler.get_user(user_id)
         if not user:
             return json_response({"error": "User not found"}, 404)
-            
-        current_user_id = int(get_jwt_identity())
-        print(f"DEBUG: current_user_id={current_user_id}, requested user_id={user_id}")
+        
+        # Debug logging for user_id and current_user_id
+        try:
+            current_user_id_raw = get_jwt_identity()
+            current_user_id = int(current_user_id_raw)
+        except (TypeError, ValueError):
+            return json_response({"error": "Invalid token identity"}, 401)
+        
+        print(f"DEBUG: user_id (param)={user_id}, current_user_id (token)={current_user_id_raw} (int: {current_user_id})")
+        
         if user_id != current_user_id:
             return json_response({"error": "Unauthorized"}, 403)
             
@@ -82,7 +89,11 @@ class UserResource(Resource):
         if not user:
             return json_response({"error": "User not found"}, 404)
             
-        current_user_id = int(get_jwt_identity())
+        try:
+            current_user_id = int(get_jwt_identity())
+        except (TypeError, ValueError):
+            return json_response({"error": "Invalid token identity"}, 401)
+        
         if user_id != current_user_id:
             return json_response({"error": "Unauthorized"}, 403)
         try:
@@ -113,7 +124,11 @@ class UserResource(Resource):
         if not user:
             return json_response({"error": "User not found"}, 404)
             
-        current_user_id = int(get_jwt_identity())
+        try:
+            current_user_id = int(get_jwt_identity())
+        except (TypeError, ValueError):
+            return json_response({"error": "Invalid token identity"}, 401)
+        
         if user_id != current_user_id:
             return json_response({"error": "Unauthorized"}, 403)
         if UserHandler.delete_user(user_id):

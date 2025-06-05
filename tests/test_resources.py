@@ -56,11 +56,16 @@ def test_user_endpoints(client, auth_headers: dict, app, db_session):
         )
         db_session.session.add(other_user)
         db_session.session.commit()
+        # Ensure other_user.id is different from user.id
+        if other_user.id == user.id:
+            other_user.id += 1
+            db_session.session.commit()
         other_token = client.post("/api/users/login", json={
             "email": "other@example.com",
             "password": "password123"
         }).json["token"]
         response = client.get(f"/api/users/{other_user.id}", headers={"Authorization": f"Bearer {new_token}"})
+        print(f"DEBUG: Unauthorized access test - requested user_id={other_user.id}, token belongs to user_id={user.id}, response status={response.status_code}")
         assert response.status_code == 403
         response = client.get(f"/api/users/{other_user.id}", headers={"Authorization": f"Bearer {other_token}"})
         assert response.status_code == 200
