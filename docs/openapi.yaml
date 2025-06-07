@@ -1,10 +1,10 @@
 swagger: "2.0"
 info:
   title: PWP Journal API
-  description: API documentation for the journaling platform.
+  description: API for managing journal entries, comments, and user authentication.
   version: "1.0"
 host: localhost:8000
-basePath: /
+basePath: /api
 schemes:
   - http
 consumes:
@@ -23,65 +23,47 @@ paths:
   /users/register:
     post:
       summary: Register a new user
-      tags:
-        - Users
+      tags: [Users]
       parameters:
         - in: body
           name: user
-          description: User registration data
           required: true
           schema:
-            type: object
-            properties:
-              username:
-                type: string
-              email:
-                type: string
-              password:
-                type: string
+            $ref: '#/definitions/UserRegister'
       responses:
         201:
-          description: User created successfully
+          description: User registered successfully
         400:
-          description: Email or username already exists
+          description: Email or username already registered
         422:
           description: Validation error
   /users/login:
     post:
-      summary: Login and retrieve a JWT token
-      tags:
-        - Users
+      summary: Log in a user and return a JWT token
+      tags: [Users]
       parameters:
         - in: body
           name: credentials
-          description: User login data
           required: true
           schema:
-            type: object
-            properties:
-              email:
-                type: string
-              password:
-                type: string
+            $ref: '#/definitions/UserLogin'
       responses:
         200:
           description: JWT token returned
         401:
           description: Invalid credentials
-  /entries/:
+  /journal_entries:
     get:
-      summary: Get all journal entries for the current user
-      tags:
-        - Journal Entries
+      summary: Retrieve all journal entries for the current user
+      tags: [Journal Entries]
       security:
         - BearerAuth: []
       responses:
         200:
-          description: A list of journal entries
+          description: List of journal entries
     post:
       summary: Create a new journal entry
-      tags:
-        - Journal Entries
+      tags: [Journal Entries]
       security:
         - BearerAuth: []
       parameters:
@@ -89,18 +71,181 @@ paths:
           name: entry
           required: true
           schema:
-            type: object
-            properties:
-              title:
-                type: string
-              content:
-                type: string
-              tags:
-                type: array
-                items:
-                  type: string
+            $ref: '#/definitions/JournalEntry'
       responses:
         201:
-          description: Entry created
+          description: Entry created successfully
         422:
           description: Validation error
+  /journal_entries/{entry_id}:
+    parameters:
+      - name: entry_id
+        in: path
+        required: true
+        type: integer
+    get:
+      summary: Retrieve a journal entry by ID
+      tags: [Journal Entries]
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Journal entry data
+        403:
+          description: Unauthorized
+        404:
+          description: Entry not found
+    put:
+      summary: Update a journal entry by ID
+      tags: [Journal Entries]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: body
+          name: entry
+          required: true
+          schema:
+            $ref: '#/definitions/JournalEntry'
+      responses:
+        200:
+          description: Entry updated successfully
+        403:
+          description: Unauthorized
+        404:
+          description: Entry not found
+        422:
+          description: Validation error
+    delete:
+      summary: Delete a journal entry by ID
+      tags: [Journal Entries]
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Entry deleted successfully
+        403:
+          description: Unauthorized
+        404:
+          description: Entry not found
+        500:
+          description: Failed to delete entry
+  /journal_entries/{entry_id}/comments:
+    parameters:
+      - name: entry_id
+        in: path
+        required: true
+        type: integer
+    get:
+      summary: Retrieve all comments for a journal entry
+      tags: [Comments]
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: List of comments
+        404:
+          description: Journal entry not found
+    post:
+      summary: Create a new comment for a journal entry
+      tags: [Comments]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: body
+          name: comment
+          required: true
+          schema:
+            $ref: '#/definitions/Comment'
+      responses:
+        201:
+          description: Comment created successfully
+        404:
+          description: Journal entry not found
+        422:
+          description: Validation error
+  /journal_entries/{entry_id}/comments/{comment_id}:
+    parameters:
+      - name: entry_id
+        in: path
+        required: true
+        type: integer
+      - name: comment_id
+        in: path
+        required: true
+        type: integer
+    put:
+      summary: Update a comment by ID
+      tags: [Comments]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: body
+          name: comment
+          required: true
+          schema:
+            $ref: '#/definitions/Comment'
+      responses:
+        200:
+          description: Comment updated successfully
+        404:
+          description: Not found or unauthorized
+        422:
+          description: Validation error
+    delete:
+      summary: Delete a comment by ID
+      tags: [Comments]
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Comment deleted successfully
+        404:
+          description: Not found or unauthorized
+
+definitions:
+  UserRegister:
+    type: object
+    required: [username, email, password]
+    properties:
+      username:
+        type: string
+        minLength: 3
+        maxLength: 50
+      email:
+        type: string
+        format: email
+      password:
+        type: string
+        minLength: 6
+  UserLogin:
+    type: object
+    required: [email, password]
+    properties:
+      email:
+        type: string
+        format: email
+      password:
+        type: string
+  JournalEntry:
+    type: object
+    required: [title, content]
+    properties:
+      title:
+        type: string
+        minLength: 1
+        maxLength: 100
+      content:
+        type: string
+        minLength: 1
+      tags:
+        type: array
+        items:
+          type: string
+  Comment:
+    type: object
+    required: [content]
+    properties:
+      content:
+        type: string
+        minLength: 1
+        maxLength: 500
