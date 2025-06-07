@@ -1,143 +1,386 @@
-openapi: 3.0.0
+openapi: 3.0.3
 info:
   title: PWP Journal API
-  description: RESTful journaling platform with JWT auth, hypermedia, and modular routes.
-  version: "1.0.0"
-
+  version: 1.0.0
+  description: API for managing journal entries, comments, and user authentication.
 servers:
-  - url: http://localhost:8000
-
+  - url: /api
 components:
   securitySchemes:
     BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-
   schemas:
-    UserRegistration:
+    UserRegister:
       type: object
-      required: [username, email, password]
+      required:
+        - username
+        - email
+        - password
       properties:
         username:
           type: string
-          example: johndoe
+          minLength: 3
+          maxLength: 50
         email:
           type: string
           format: email
-          example: johndoe@example.com
         password:
           type: string
-          format: password
-          example: SecretPassword123
-
+          minLength: 6
     UserLogin:
       type: object
-      required: [email, password]
+      required:
+        - email
+        - password
       properties:
         email:
           type: string
-          example: johndoe@example.com
+          format: email
         password:
           type: string
-          example: SecretPassword123
-
-    JWTToken:
+    JournalEntry:
       type: object
-      properties:
-        token:
-          type: string
-          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-
-    JournalEntryInput:
-      type: object
-      required: [title, content]
+      required:
+        - title
+        - content
       properties:
         title:
           type: string
-          example: My First Entry
+          minLength: 1
+          maxLength: 100
         content:
           type: string
-          example: Today, I started using this journaling API!
+          minLength: 1
         tags:
           type: array
           items:
             type: string
-          example: [personal, daily]
-
-    CommentInput:
+          default: []
+    Comment:
       type: object
-      required: [content]
+      required:
+        - content
       properties:
         content:
           type: string
-          example: Great entry!
-
-    HypermediaLinks:
+          minLength: 1
+          maxLength: 500
+    ErrorResponse:
       type: object
       properties:
-        self:
+        error:
+          type: string
+    ValidationErrorResponse:
+      type: object
+      properties:
+        errors:
           type: object
-          properties:
-            href:
+          additionalProperties:
+            type: array
+            items:
               type: string
-        edit:
-          type: object
-          properties:
-            href:
-              type: string
-        delete:
-          type: object
-          properties:
-            href:
-              type: string
-        comments:
-          type: object
-          properties:
-            href:
-              type: string
-        history:
-          type: object
-          properties:
-            href:
-              type: string
-
+    TokenResponse:
+      type: object
+      properties:
+        token:
+          type: string
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+    EntryIdResponse:
+      type: object
+      properties:
+        entry_id:
+          type: integer
+        message:
+          type: string
+    CommentIdResponse:
+      type: object
+      properties:
+        comment_id:
+          type: integer
+        message:
+          type: string
 paths:
-  /users/register:
+  /journal_entries:
+    get:
+      summary: Retrieve all journal entries for the current user
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of journal entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JournalEntry'
     post:
-      summary: Register a new user
-      tags: [Users]
+      summary: Create a new journal entry
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UserRegistration'
+              $ref: '#/components/schemas/JournalEntry'
       responses:
         '201':
-          description: User created successfully
+          description: Entry created successfully
           content:
             application/json:
-              example:
-                message: User registered successfully
-        '400':
-          description: Duplicate email or username
-          content:
-            application/json:
-              example:
-                error: Username already taken
+              schema:
+                $ref: '#/components/schemas/EntryIdResponse'
         '422':
           description: Validation error
           content:
             application/json:
-              example:
-                errors:
-                  email: ["Not a valid email address"]
-
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+  /journal_entries/{entry_id}:
+    parameters:
+      - name: entry_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      summary: Retrieve a journal entry by ID
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Journal entry data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntry'
+        '403':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Entry not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      summary: Update a journal entry by ID
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JournalEntry'
+      responses:
+        '200':
+          description: Entry updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '403':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Entry not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+    delete:
+      summary: Delete a journal entry by ID
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Entry deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '403':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Entry not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to delete entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /journal_entries/{entry_id}/comments:
+    parameters:
+      - name: entry_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      summary: Retrieve all comments for a journal entry
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of comments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Comment'
+        '404':
+          description: Journal entry not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Create a new comment for a journal entry
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Comment'
+      responses:
+        '201':
+          description: Comment created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentIdResponse'
+        '404':
+          description: Journal entry not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+  /journal_entries/{entry_id}/comments/{comment_id}:
+    parameters:
+      - name: entry_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: comment_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    put:
+      summary: Update a comment by ID
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Comment'
+      responses:
+        '200':
+          description: Comment updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '404':
+          description: Not found or unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+    delete:
+      summary: Delete a comment by ID
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Comment deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '404':
+          description: Not found or unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /users/register:
+    post:
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRegister'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Email or username already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
   /users/login:
     post:
-      summary: Login and retrieve a JWT token
-      tags: [Users]
+      summary: Log in a user and return a JWT token
       requestBody:
         required: true
         content:
@@ -150,244 +393,104 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JWTToken'
-              example:
-                token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                $ref: '#/components/schemas/TokenResponse'
         '401':
           description: Invalid credentials
           content:
             application/json:
-              example:
-                error: Invalid credentials
-
-  /entries/:
-    get:
-      summary: Get all journal entries for the current user
-      tags: [Journal Entries]
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: List of journal entries with hypermedia links
-          content:
-            application/json:
-              example:
-                - id: 1
-                  title: My First Entry
-                  tags: [daily, personal]
-                  _links:
-                    self: { href: "/entries/1" }
-                    edit: { href: "/entries/1" }
-                    delete: { href: "/entries/1" }
-                    comments: { href: "/entries/1/comments" }
-
-    post:
-      summary: Create a new journal entry
-      tags: [Journal Entries]
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/JournalEntryInput'
-      responses:
-        '201':
-          description: Entry created
-          content:
-            application/json:
-              example:
-                id: 2
-                message: Entry created successfully
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation error
           content:
             application/json:
-              example:
-                errors:
-                  title: ["Missing data"]
-
-  /entries/{entry_id}:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+  /users/{user_id}:
+    parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: integer
     get:
-      summary: Get a specific journal entry
-      tags: [Journal Entries]
+      summary: Retrieve user data by ID
       security:
         - BearerAuth: []
-      parameters:
-        - name: entry_id
-          in: path
-          required: true
-          schema:
-            type: integer
       responses:
         '200':
-          description: Journal entry with hypermedia
+          description: User data
           content:
             application/json:
-              example:
-                id: 1
-                title: My First Entry
-                content: Welcome to my journal
-                tags: [daily, personal]
-                _links:
-                  self: { href: "/entries/1" }
+              schema:
+                type: object
+        '403':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
-          description: Entry not found
-
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     put:
-      summary: Update a journal entry
-      tags: [Journal Entries]
+      summary: Update user data by ID
       security:
         - BearerAuth: []
-      parameters:
-        - name: entry_id
-          in: path
-          required: true
-          schema:
-            type: integer
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/JournalEntryInput'
+              $ref: '#/components/schemas/UserRegister'
       responses:
         '200':
-          description: Entry updated
-        '404':
-          description: Entry not found
-
-    delete:
-      summary: Delete a journal entry
-      tags: [Journal Entries]
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: entry_id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: Entry deleted
-        '404':
-          description: Entry not found
-
-  /entries/{entry_id}/comments:
-    get:
-      summary: List comments for an entry
-      tags: [Comments]
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: entry_id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: List of comments
+          description: User updated successfully
           content:
             application/json:
-              example:
-                - id: 1
-                  content: Great entry!
-                  user: johndoe
-
-    post:
-      summary: Add a comment to an entry
-      tags: [Comments]
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: entry_id
-          in: path
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CommentInput'
-      responses:
-        '201':
-          description: Comment created
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '403':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation error
-
-  /entries/{entry_id}/comments/{comment_id}:
-    put:
-      summary: Update a comment
-      tags: [Comments]
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: entry_id
-          in: path
-          required: true
-          schema:
-            type: integer
-        - name: comment_id
-          in: path
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CommentInput'
-      responses:
-        '200':
-          description: Comment updated
-        '404':
-          description: Not found
-
-    delete:
-      summary: Delete a comment
-      tags: [Comments]
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: entry_id
-          in: path
-          required: true
-          schema:
-            type: integer
-        - name: comment_id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: Comment deleted
-        '404':
-          description: Not found
-
-  /entries/{entry_id}/history:
-    get:
-      summary: View edit history for a journal entry
-      tags: [Journal Entries]
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: entry_id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: List of edit history entries
           content:
             application/json:
-              example:
-                - timestamp: "2025-04-09T10:00:00Z"
-                  content: Updated entry with new thoughts
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+    delete:
+      summary: Delete a user by ID
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '403':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
