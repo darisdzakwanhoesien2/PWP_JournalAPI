@@ -10,8 +10,9 @@ services:
       - .:/app
     command: gunicorn -w 1 -b 0.0.0.0:8000 wsgi:app
     environment:
-      - FLASK_DEBUG=1
-      - FLASK_ENV=development
+      - DEBUG=False
+      - SECRET_KEY=your_production_secret_key
+      - DATABASE_URL=postgresql://journal_user:journal_pass@db:5432/journal_db
     depends_on:
       - db
 

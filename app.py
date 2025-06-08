@@ -13,9 +13,12 @@ def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
 
     app.config.from_mapping(
-        DEBUG=True,
-        SECRET_KEY="dev",
-        SQLALCHEMY_DATABASE_URI="sqlite:///" + os.path.join(app.instance_path, "journal.db"),
+        DEBUG=bool(os.environ.get("DEBUG", "False") == "True"),
+        SECRET_KEY=os.environ.get("SECRET_KEY", "dev"),
+        SQLALCHEMY_DATABASE_URI=os.environ.get(
+            "DATABASE_URL",
+            "sqlite:///" + os.path.join(app.instance_path, "journal.db")
+        ),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SWAGGER={"title": "PWP Journal API", "uiversion": 3}
     )
