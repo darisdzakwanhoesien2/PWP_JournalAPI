@@ -51,18 +51,14 @@ def insert_edit_history(file_path):
     with open(file_path, "r") as file, app.app_context():
         reader = csv.reader(file)
         for row in reader:
-            journal_entry_id, user_id, previous_content, new_content = row
+            journal_entry_id, previous_content, new_content = row
             edit = EditHistory(
                 journal_entry_id=int(journal_entry_id),
-                user_id=int(user_id),
-                edited_at=datetime.now(timezone.utc), #datetime.utcnow(),
-                previous_content=previous_content.strip(),
-                new_content=new_content.strip()
+                old_content=previous_content.strip(),
             )
             db.session.add(edit)
         db.session.commit()
     print("✅ Edit History added successfully!")
-
 def insert_comments(file_path):
     """Reads comments from file and inserts them into the database."""
     with open(file_path, "r") as file, app.app_context():
