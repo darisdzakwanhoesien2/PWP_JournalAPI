@@ -161,25 +161,19 @@ Embedded links allow clients to navigate between resources:
 
 ### API Endpoints <a name="api-endpoints"></a>
 
-| Resource Name       | Resource URL                          | Resource Description                                                             | Methods         | Done |
-|---------------------|----------------------------------------|----------------------------------------------------------------------------------|------------------|------|
-| User Management     | `/users/register`                      | Register a new user                                                              | POST             | ✅   |
-|                     | `/users/login`                         | Authenticate a user, return JWT                                                  | POST             | ✅   |
-|                     | `/users/{id}`                          | Get, update, or delete user                                                      | GET, PUT, DELETE | ✅   |
-| Journal Entry       | `/entries/`                            | Create or list user journal entries                                              | POST, GET        | ✅   |
-|                     | `/entries/{entry_id}`                  | Retrieve, update, or delete a specific journal entry                             | GET, PUT, DELETE | ✅   |
-| Comments            | `/entries/{entry_id}/comments`         | Add or list comments for an entry                                                | POST, GET        | ✅   |
-|                     | `/comments/{comment_id}`               | Update or delete a comment                                                       | PUT, DELETE      | ✅   |
-| Edit History        | `/entries/{entry_id}/history`          | View edit history of a journal entry                                             | GET              | ✅   |
 
 ### Error Handling <a name="error-handling"></a>
 
 | Code | Meaning          | Example                      |
 |------|------------------|------------------------------|
 | 422  | Validation Error | Missing required field       |
+|      |                  | Example: {"message": "The email field is required."} |
 | 401  | Unauthorized     | Token missing or invalid     |
+|      |                  | Example: {"message": "Authorization token is missing or invalid."} |
 | 403  | Forbidden        | User not allowed             |
+|      |                  | Example: {"message": "You do not have permission to access this resource."} |
 | 404  | Not Found        | Resource doesn't exist       |
+|      |                  | Example: {"message": "The requested resource was not found."} |
 
 ---
 
@@ -237,7 +231,7 @@ MIT License © 2025 Oulu PWP Team
 
 ### Contact <a name="contact"></a>
 
-For feedback, contact Daris at daris@example.com
+For feedback, contact the team at oulu.pwp@example.com
 
 ---
 
@@ -249,4 +243,56 @@ For feedback, contact Daris at daris@example.com
 - [x] Docker Ready
 - [x] Wiki + Mermaid Diagrams
 - [x] Auxiliary Service Ready
+- [x] Environment Variables Documented
+- [x] Contributing Guidelines
+- [x] Code of Conduct
+- [x] Security Measures Documented
+- [x] FAQ Section
+
+---
+
+## Contributing <a name="contributing"></a>
+
+Contributions to the Journal API are welcome! If you'd like to contribute, please follow these steps:
+
+1.  Fork the repository.
+2.  Create a new branch for your feature or bugfix.
+3.  Make your changes and ensure all tests pass.
+4.  Submit a pull request with a detailed description of your changes.
+
+---
+
+## Code of Conduct <a name="code-of-conduct"></a>
+
+This project adheres to the Contributor Covenant [code of conduct](https://www.contributor-covenant.org/version/2/0/code_of_conduct/). By participating, you are expected to uphold this code. Please report unacceptable behavior to oulu.pwp@example.com.
+
+---
+
+## Environment Variables <a name="environment-variables"></a>
+
+The following environment variables can be used to configure the application:
+
+- `DATABASE_URL`: The URL of the database to use. Defaults to `sqlite:///instance/journal.db`.
+- `JWT_SECRET_KEY`: The secret key used to sign JWT tokens. Defaults to a randomly generated string.
+- `FLASK_DEBUG`: Enable or disable debug mode. Defaults to `False`.
+
+---
+
+## Security <a name="security"></a>
+
+The Journal API uses JWTs for authentication and authorization. Passwords are hashed using bcrypt. The API is protected against common web vulnerabilities such as XSS and CSRF.
+
+---
+
+## FAQ <a name="faq"></a>
+
+**Q: How do I run the API in development mode?**
+
+A: Set the `FLASK_DEBUG` environment variable to `True`.
+
+**Q: How do I contribute to the project?**
+
+A: See the [Contributing](#contributing) section for more information.
+
+---
 
