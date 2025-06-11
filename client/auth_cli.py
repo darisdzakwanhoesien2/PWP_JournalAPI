@@ -21,7 +21,11 @@ def register(
         response.raise_for_status()
         rprint("[green]✅ Registered![/green]")
     except requests.exceptions.HTTPError as e:
-        rprint(f"[red]❌ Registration failed: {e.response.json()['error']}[/red]")
+        try:
+            error_message = e.response.json()['error']
+        except:
+            error_message = str(e)
+        rprint(f"[red]❌ Registration failed: {error_message}[/red]")
 
 @auth_app.command()
 def login(

@@ -23,6 +23,8 @@ def app():
         from extensions import db
         db.create_all()
         yield app
+        db.session.rollback()
+        db.session.close()
         db.drop_all()
 
 @pytest.fixture
