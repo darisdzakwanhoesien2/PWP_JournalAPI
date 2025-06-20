@@ -2,9 +2,12 @@
 from flask import Flask, request, jsonify
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required
 from flask_caching import Cache
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, scoped_session
 from src.routes_users import users_bp
 from src.routes_entries import entries_bp
 from src.cache import cache
+from src.models_orm import Base
 
 def create_app():
     app = Flask(__name__)
@@ -15,10 +18,23 @@ def create_app():
         app.config["CACHE_TYPE"] = "SimpleCache"
         app.config["CACHE_DEFAULT_TIMEOUT"] = 300
     cache.init_app(app)
+
+    # SQLAlchemy setup
+    DATABASE_URL = "postgresql://user:password@localhost:5432/pwp_db"  # Update with actual credentials or env var
+    DATABASE_URL = "sqlite:///pwp_db.sqlite3"  # Updated to use SQLite for easier setup
+    engine = create_engine(DATABASE_URL)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine)
+    app.db_session = scoped_session(session_factory)
+
     jwt = JWTManager(app)
 
     app.register_blueprint(users_bp, url_prefix='/users')
     app.register_blueprint(entries_bp, url_prefix='/entries')
+
+    @app.teardown_appcontext
+    def remove_session(exception=None):
+        app.db_session.remove()
 
     @app.route('/login', methods=['POST'])
     def login():

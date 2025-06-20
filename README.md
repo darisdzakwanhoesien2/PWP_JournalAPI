@@ -11,7 +11,7 @@ __Remember to include all required documentation and HOWTOs, including how to cr
 
 ## API Overview
 
-The Web API to be developed offers functionalities to structure non-real-time conversations among users about topics of interest. Messages are grouped in Threads, which are further grouped in Topics. The API provides an interface to access and manage these messages, supporting operations such as creating, reading, updating, and deleting users, entries, comments, and edit histories. This API is envisioned as part of a larger online learning environment system, responsible for discussion forum features that can be integrated into other components.
+The Web API developed offers functionalities to structure non-real-time conversations among users about topics of interest. Messages are grouped in Threads, which are further grouped in Topics. The API provides an interface to access and manage these messages, supporting operations such as creating, reading, updating, and deleting users, entries, comments, and edit histories. This API is part of a larger online learning environment system, responsible for discussion forum features that can be integrated into other components.
 
 ## Main Concepts and Relations
 
@@ -19,7 +19,24 @@ The main concepts of the API include Users, Entries, Comments, and Edit Historie
 
 ## API Uses
 
-The API supports both human-usable clients and machine-to-machine services. For example, a web client can allow users to interact with discussion threads, while automated services can use the API to aggregate or moderate content. The API exposes endpoints for managing users, entries, comments, and edit histories, enabling diverse clients to integrate discussion forum functionalities into their applications.
+The API supports both human-usable clients and machine-to-machine services. For example, a web client allows users to interact with discussion threads, while automated services can use the API to aggregate or moderate content. The API exposes endpoints for managing users, entries, comments, and edit histories, enabling diverse clients to integrate discussion forum functionalities into their applications.
+
+## Testing and Verification
+
+The API implementation has been thoroughly tested with comprehensive unit tests covering all endpoints and edge cases, including user registration, entries CRUD, comments CRUD, and edit history management. Tests verify correct behavior for creation, retrieval, update, and deletion operations, with proper authentication and error handling. The tests confirm the API meets the requirements described in the project documentation.
+
+## Database Design and Implementation
+
+The project uses PostgreSQL as the database backend, with SQLAlchemy as the ORM for database modeling and access. The database schema includes four main tables: Users, Entries, Comments, and EditHistory, each represented by a corresponding SQLAlchemy model in `src/models_orm.py`.
+
+- **Users**: Stores user information including username, email, and registration timestamp.
+- **Entries**: Represents posts or messages created by users, linked to the Users table via a foreign key.
+- **Comments**: Associated with Entries and Users, storing comments content and timestamps.
+- **EditHistory**: Tracks changes made to Entries, storing the edit timestamp and change details.
+
+A database setup and population script (`src/db_setup.py`) is provided to create the tables and insert sample data for testing and development. The Flask application (`src/app.py`) is configured to connect to the PostgreSQL database and manage sessions using SQLAlchemy.
+
+Instructions for setting up the PostgreSQL database, installing dependencies, running the setup script, and populating the database are included in the project documentation to facilitate easy deployment and testing.
 
 ## Related Work
 
