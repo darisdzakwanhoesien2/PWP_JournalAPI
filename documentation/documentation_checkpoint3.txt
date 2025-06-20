@@ -1,0 +1,176 @@
+PWP Courses: https://lovelace.oulu.fi/ohjelmoitava-web/pwp-spring-2025/ 
+
+Here is our state diagram
+stateDiagram-v2
+    [*] --> UsersCollection: "GET /users"
+    UsersCollection --> UserItem: "POST /users/register - _links self /users/{id}"
+    UsersCollection --> UserItem: "GET /users/{id} - _links self /users/{id}, entries /users/{id}/entries"
+    UserItem --> EntriesCollection: "GET /users/{id}/entries - _links self /users/{id}/entries, user /users/{id}"
+    UserItem --> UserItem: "PUT /users/{id} - Update user - _links self /users/{id}"
+    UserItem --> UserItem: "DELETE /users/{id} - Delete user"
+    UserItem --> [*]: "User deleted"
+    EntriesCollection --> EntryItem: "POST /entries - _links self /entries/{id}"
+    EntriesCollection --> EntryItem: "GET /entries/{id} - _links self /entries/{id}, comments /entries/{id}/comments, user /users/{id}"
+    EntriesCollection --> EntriesCollection: "GET /entries - List all entries - _links self /entries, user /users/{id}"
+    EntryItem --> EntryItem: "PUT /entries/{id} - Update entry - _links self /entries/{id}"
+    EntryItem --> EntryItem: "DELETE /entries/{id} - Delete entry"
+    EntryItem --> CommentsCollection: "GET /entries/{id}/comments - _links self /entries/{id}/comments, entry /entries/{id}"
+    EntryItem --> EditHistoryCollection: "GET /entries/{id}/edit_history - _links self /entries/{id}/edit_history, entry /entries/{id}"
+    CommentsCollection --> CommentItem: "POST /entries/{id}/comments - _links self /comments/{comment_id}"
+    CommentsCollection --> CommentItem: "GET /comments/{comment_id} - _links self /comments/{comment_id}, entry /entries/{id}"
+    CommentsCollection --> CommentsCollection: "GET /entries/{id}/comments - List comments - _links self /entries/{id}/comments"
+    CommentItem --> CommentItem: "PUT /comments/{comment_id} - Update comment - _links self /comments/{comment_id}"
+    CommentItem --> CommentItem: "DELETE /comments/{comment_id} - Delete comment"
+    CommentItem --> [*]: "Comment deleted"
+    EditHistoryCollection --> EditHistoryItem: "GET /entries/{id}/edit_history/{edit_id} - _links self /entries/{id}/edit_history/{edit_id}, entry /entries/{id}"
+    EditHistoryCollection --> EditHistoryCollection: "GET /entries/{id}/edit_history - List edit history - _links self /entries/{id}/edit_history"
+    EditHistoryItem --> [*]: "View only"
+    EntryItem --> [*]: "Entry deleted"
+
+Important information for Deadline 3 https://github.com/programmable-web-project-unioulu/PWP/wiki/API-implementation
+‼️  This chapter should be completed by Deadline 3 (see course information at Lovelace)
+
+📑  Chapter summary
+In this section you must implement a RESTful API. The minimum requirements are summarized in the Minimum Requirements section of the Project Work Assignment. If you do not meet the minimum requirements this section WILL NOT be evaluated.
+CHAPTER GOALS
+Implement a RESTful API
+Write tests for the API
+✔️     Chapter evaluation (max 21 points)
+You can get a maximum of 21 points after completing this section. More detailed evaluation is provided in the evaluation sheet in Lovelace.
+RESTful API implementation
+List of implemented resources
+📑  Content that must be included in the section
+A list of all resourcess. Each resource should include its URL, a short description and supported methods. You should mark also which is the name of the class implementing the resource (if you have implemented such resource) Consider that you do not need to implement every resource you initially planned.   The minimum requirements are summarized in the Minimum requirements section from the Project work assignment.
+✏️ List your resources here. You can use the table below for listing resources. You can also list unimplemented resources if you think they are worth mentioning
+
+Resource name	Resource url	Resource description	Supported Methods	Implemented
+Resource Name 1				
+Resource Name 2				
+Basic implementation
+💻     TODO: SOFTWARE TO DELIVER IN THIS SECTION
+The code repository must contain:
+The source code for the RESTful API 
+The external libraries that you have used
+We recommend to include a set of scripts to setup and run your server
+A database file or the necessary files and scripts to automatically populate your database.
+A README.md file containing:
+Dependencies (external libraries)
+How to setup the framework.
+How to populate and setup the database.
+How to setup (e.g. modifying any configuration files) and run your RESTful API.
+The URL to access your API (usually nameofapplication/api/version/)=> the path to your application.
+Do not forget to include in the README.md file which is the path to access to your application remotely.
+NOTE: Your code MUST be clearly documented. For each public method/function you must provide: a short description of the method, input parameters, output parameters, exceptions (when the application can fail and how to handle such fail).  In addition should be clear which is the code you have implemented yourself and which is the code that you have borrowed from other sources. Always provide a link to the original source. This includes links to the course material.
+
+✏️ You do not need to write anything in this section, just complete the implementation.
+
+RESTful API testing
+💻     TODO: SOFTWARE TO DELIVER IN THIS SECTION
+The code repository must contain:
+The code to test your RESTful API (Functional test)
+The code of the test MUST be commented indicating what you are going to test in each test case.
+The test must include values that force error messages
+The external libraries that you have used
+We recommend to include a set of scripts to execute your tests.
+A database file or the necessary files and scripts to automatically populate your database.
+A README.md file containing:
+Dependencies (external libraries)
+Instructions on how to run the different tests for your application.
+Do not forget to include in the README.md the instructions on how to run your tests. Discuss briefly which were the main errors that you detected thanks to the functional testing.
+Remember that you MUST implement a functional testing suite. A detailed description of the input / output in the a REST client plugin.
+
+In this section it is your responsibility that your API handles requests correctly. All of the supported methods for each resource should work. You also need to show that invalid requests are properly handled, and that the response codes are correct in each situation.
+
+✏️ Most important part of this section is completing the implementation. Write down here a short reflection on which are the main errors you have solved thanks to the functional tests.
+
+REST conformance
+📑  Content that must be included in the section
+Explain briefly how your API meets REST principles. Focus specially in these three principles: Addressability, Uniform interface, Statelessness. Provide examples (e.g. how does each HTTP method work in your API). Note that Connectedness will be addressed in more depth in Deadline 4.
+✏️ Write your text here
+
+Extras
+📑  Details on extra features
+This section lists the additional features that will be graded as part of the API but are not required. In addition to implementing the feature you are also asked to write a short description for each.
+URL Converters
+📑  Fill this section if you used URL converters
+Write a short rationale of how URL converters are used, including your thoughts on the possible trade-offs. Go through all URL parameters in your API and describe whether they use a converter, what property is used for converting, or why it's not using a converter.
+✏️ Write your text here
+
+Schema Validation
+📑  Fill this section if you used JSON schema validation
+Write a short description of your JSON schemas, including key decision making for choosing how to validate each field.
+✏️ Write your text here
+
+Caching
+📑  Fill this section if you implemented server side caching
+Explain your caching decisions here. Include an explanation for every GET method in your API, explaining what is cached (or why it is not cached), and how long is it cached (and why). If you are using manual cache clearing, also explain when it happens.
+✏️ Write your text here
+
+Authentication
+📑  Fill this section if you implemented authentication
+Explain your authentication scheme here. Describe the authentication requirements for each resource in your API, and your reasoning for the decisions. In addition, provide a plan for how API keys will be distributed, even if the distribution is not currently implemented.
+✏️ Write your text here
+
+Minimum requirements and constraints¶ https://lovelace.oulu.fi/ohjelmoitava-web/ohjelmoitava-web/pwp-project-work-assignment/#minimum-requirements-and-constraints 
+Students can use any programming language both for the RESTful API and for the client application. BUT:
+We can only give support for the languages and frameworks provided in the exercises.
+If students choose a different language or platform for the server they NEED TO SET UP A SERVER SO WE CAN TEST THEIR RESTful API. For the client, students should present a demo during a meeting to any of the course staff.
+In order to pass the course students must deliver:
+The project report with all sections except 5: Client / Deployment
+A working version of the Web API.
+Check minimum requirements for the RESTful API in the following subsections
+Enough exercises to fulfill the points requirement
+In order to get a good grade (3 or more) students must deliver:
+The full project report
+A working version of the web API and the client
+Check minimum requirements for the RESTful API and the client in the following subsections.
+In addition, students should do one of the two options:
+Implement a third piece of software called "auxiliary service" to improve their grade further.
+Deploy the Web API and possible client to a production environment (not just testing), including adequate certificates. More info on Exercise 3.
+Note that it is possible to get a five without any of the two prevoius options, but it is very, very hard.
+RESTful API¶
+Design and implement at least 5 resources. You can design and implement more resources if you want. You can even not implement all the resources you have in your design (minimum is 5).
+Each HTTP method (GET,PUT/PATCH, POST and DELETE) must be used at least twice in the uniform interface (PATCH is not mandatory). This does not mean that all the methods GET/PUT/POST/DELETE must be used in one single resource.
+The RESTful API must be documented using any of the tools presented in Exercise 3
+Student must provide software to check the code quality (linter) of the software they write.
+Students must provide software to test:
+The RESTful API (functional testing)
+It is also necessary to include a coverage tool, where it is shown the scope of your code that has been tested. Without that, some aspects of the assessment could not be completed.
+We recommend to use Hypermedia format (e.g. Mason, HAL, Siren, UBER, Collection+Json) for the resource representations. We also accept the popular CRUD approach (that is using plain json or XML as resource representation). Still Connectedness is a ROA requirement, hence it is needed that there are links or connections among resources.
+Students who do not use hypermedia formats (e.g. Mason) will not be able to get full points in all the sections.
+Client Application¶
+Use at least 3 resources of the RESTful API.
+Implement a GUI or a command line tool. You can implement non-human driven clients also, but first you must explain your ideas to one member of the course staff.
+If you use HTML, it is not allowed to generate the code dynamically in the server.
+You must use Javascript asynchronous requests.
+Use all the methods of the Uniform interface at least once.
+Student must provide software to check the code quality (linter) of the software they write.
+Auxiliary Service¶
+Communicate with the API and the client
+Performs some operations that should be separated from the API server
+Cannot be human-driven - a human can message this service through an interface in the client, but the service itself is not directly controlled by a human.
+This service does not need to use REST API. Any other approach (event-driven / RPC...) can be used. More info of possibilties in Exercise 4.
+Student must provide software to check the code quality (linter) of the software they write.
+Students must provide functional tests.
+It is also necessary to include a coverage tool, where it is shown the scope of your code that has been tested. Without that, some aspects of the assessment could not be completed.
+
+
+
+	points	details https://lovelace.oulu.fi/ohjelmoitava-web/ohjelmoitava-web/pwp-deliverable-3/
+1. Wiki Report	5.0	
+	Resource Table	1.0	The resource table exists and clearly shows what URIs are available in the API and what methods each of them support.
+	Addressability	1.5	The justification shows through examples how addressability is achieved in the API. The API implementation is fully addressable.The hierarchy of resources is consistent.
+	Uniform Interface	1.5	The description explains how each HTTP method is used in the API, through examples. The API designs and implements uniform interface correctly, using methods adequately.
+	Statelesness	1.0	The description shows that the writer understands what is server side state, and explains how the API achieves statelesness. The API implementation doesn't have server side state.
+2. Basic Implementation	10.0	
+	Project Structure	2.0	The project repository has good structure as recommended in the exercises. Single file applications will not fulfill this criteria. If you use a different framework than the one proposed in the course, you need to provide some information on good practices for the framework you are using (e.g link to documentation material).
+	Code Quality	1.0	The code follows rules for idiomatic Python. This includes passing PyLint with a score of 9 or higher, and there should be grounds for ignoring its corrections. This will be scored very strictly.If you are not using Python, you must use an equivalent linting tool and showing the result. Without linting tool you cannot get any points.
+	Documentation	1.0	The code is documented where necessary. Sources for borrowed code are clearly marked, with a link to the source. Use of AI is clearly indicated (including which tool and prompts were used). This includes any examples taken directly from the course material.
+	Instructions	1.0	The project root contains a README with full instructions on how to install and deploy the API. Instructions also show how to run the tests.
+	Test Coverage	3.0	Test coverage in relevant files is 96% or higher for 3p, 91-95% for 2p, 85-90% for 1p.
+	Implementation Works	2.0	The implementation works, as shown mainly by tests and the reviewer doesn't find any problems in the code. If the coverage is not large enough, working implementation is done through demonstration. In that case, students can get only 1.0. at maximum. In any case, if the reviewer can ask for additional tests, and if they failed grade can be reduced.
+3. Extras	6.0	
+	URL Converters	1.0	The API uses at least one URL converter, and the (lack of) use of converters is justified for each URL variable in the code.
+	Schema Validation	1.0	The API uses JSON schema validation to validate incoming requests. Decisions for choosing types and formats are justified in the text.
+	Caching	2.0	The API uses caching where relevant, in at least one GET method. The decisions regarding caching for each GET method are justified in the text. Cache invalidation is also explained in the text.
+	Authentication	2.0	The API uses authentication for at least one resource. The (lack of) use of authentication is justified for each resource and method.

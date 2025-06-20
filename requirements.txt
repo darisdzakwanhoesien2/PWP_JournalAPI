@@ -1,0 +1,4 @@
+Flask
+flask-jwt-extended
+Flask-Caching
+marshmallow

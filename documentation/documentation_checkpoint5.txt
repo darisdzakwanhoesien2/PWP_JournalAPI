@@ -1,0 +1,176 @@
+PWP Courses: https://lovelace.oulu.fi/ohjelmoitava-web/pwp-spring-2025/ 
+
+Here is our state diagram
+stateDiagram-v2
+    [*] --> UsersCollection: "GET /users"
+    UsersCollection --> UserItem: "POST /users/register - _links self /users/{id}"
+    UsersCollection --> UserItem: "GET /users/{id} - _links self /users/{id}, entries /users/{id}/entries"
+    UserItem --> EntriesCollection: "GET /users/{id}/entries - _links self /users/{id}/entries, user /users/{id}"
+    UserItem --> UserItem: "PUT /users/{id} - Update user - _links self /users/{id}"
+    UserItem --> UserItem: "DELETE /users/{id} - Delete user"
+    UserItem --> [*]: "User deleted"
+    EntriesCollection --> EntryItem: "POST /entries - _links self /entries/{id}"
+    EntriesCollection --> EntryItem: "GET /entries/{id} - _links self /entries/{id}, comments /entries/{id}/comments, user /users/{id}"
+    EntriesCollection --> EntriesCollection: "GET /entries - List all entries - _links self /entries, user /users/{id}"
+    EntryItem --> EntryItem: "PUT /entries/{id} - Update entry - _links self /entries/{id}"
+    EntryItem --> EntryItem: "DELETE /entries/{id} - Delete entry"
+    EntryItem --> CommentsCollection: "GET /entries/{id}/comments - _links self /entries/{id}/comments, entry /entries/{id}"
+    EntryItem --> EditHistoryCollection: "GET /entries/{id}/edit_history - _links self /entries/{id}/edit_history, entry /entries/{id}"
+    CommentsCollection --> CommentItem: "POST /entries/{id}/comments - _links self /comments/{comment_id}"
+    CommentsCollection --> CommentItem: "GET /comments/{comment_id} - _links self /comments/{comment_id}, entry /entries/{id}"
+    CommentsCollection --> CommentsCollection: "GET /entries/{id}/comments - List comments - _links self /entries/{id}/comments"
+    CommentItem --> CommentItem: "PUT /comments/{comment_id} - Update comment - _links self /comments/{comment_id}"
+    CommentItem --> CommentItem: "DELETE /comments/{comment_id} - Delete comment"
+    CommentItem --> [*]: "Comment deleted"
+    EditHistoryCollection --> EditHistoryItem: "GET /entries/{id}/edit_history/{edit_id} - _links self /entries/{id}/edit_history/{edit_id}, entry /entries/{id}"
+    EditHistoryCollection --> EditHistoryCollection: "GET /entries/{id}/edit_history - List edit history - _links self /entries/{id}/edit_history"
+    EditHistoryItem --> [*]: "View only"
+    EntryItem --> [*]: "Entry deleted"
+
+Important information for Deadline 5 https://github.com/programmable-web-project-unioulu/PWP/wiki/API-deployment-and-consumption
+‼️  This chapter should be completed by Deadline 5 (see course information at Lovelace)
+
+📑  Chapter summary
+In this section your group must design, implement and test a client application that uses the RESTful API implemented by you. If you utilize HTML and JavaScript, it is mandatory that the HTML is contained in static files. It means that your server cannot generate HTML dynamically (using PHP or JSP). All modifications made to the webpage must be done in the client side using javascript. Of course, you can use anchors () to load a new URL. Please, consider the Same Origin Policy" because it might cause problems to your client implementation. It is recommend to host the files in a local HTTP server and not directly in your file system. We will give you more instructions in Exercise 4.
+In addition, you can either
+
+Include an auxiliary service that interacts with your API (and possibly the client). More information in Exercise 4.
+Deploy your web api in a production environment, as explained in Exercise 3
+CHAPTER GOALS
+Deploy an API in a production environment
+Learn how to use APIs
+Implement a client that uses the project API
+Implement an auxiliary service that interacts with your API
+✔️     Chapter evaluation (max 26 points)
+You can get a maximum of 26 points after completing this section. You can check more detailed assessment criteria in the Lovelace return box for Deadline 5.
+RESTful Client
+Client application description
+Overview
+📑  Content that must be included in the section
+You must provide a description of the application. You must clarify which are the goals of the application and why a user would like to use this application. You must also state what is the functionality provided by the RESTful API used by this application.
+✏️ Write here your application description
+
+Functional requirements
+📑  Content that must be included in the section
+Provide a use case diagram of your application. For each case, specify which is the API resource/s that cover the given functionality
+✏️ Draw your diagram here including a discussion of use cases
+
+Client design
+GUI layout
+📑  Content that must be included in the section
+Draw a diagram of the client layout. Students can use any software they want to do the sketching. For more professional-like design, students can use any wireframing tool available in Internet. Some of them can be found from https://www.hostinger.com/tutorials/best-wireframing-tools. Pencil is free, open source and easy to use. Other options are Visio and Balsamiq (you need a license). You can also create the UI using a paper and a pencil and scan the resulting drawing.
+✏️ Add your diagrams here
+
+Screen workflow
+📑  Content that must be included in the section
+Draw the screen workflow of your client (which are the possible screens that you can access from one specific screen?)
+✏️ Add your diagrams here
+
+Client implementation
+💻     TODO: SOFTWARE TO DELIVER IN THIS SECTION
+The code repository must contain:
+The source code for the client application. 
+External libraries. You can also report them in the README.md if the libraries are very big or need to be installed.
+The code for testing the application (if it exists).
+We recommend to include a set of scripts to run your application and tests (if they exist).
+A README.md file containing:
+Dependencies (external libraries)
+How to setup/install the client
+How to configure and run the client
+How to run the different tests of your client (if you have implemented unit testing)
+NOTE: Your code MUST be clearly documented. For each public method/function you must provide: a short description of the method, input parameters, output parameters, exceptions (when the application can fail and how to handle such fail). Check Exercise 4 for examples on how to document the code. addition, should be clear which is the code you have implemented yourself and which is the code that you have borrowed from other sources.
+✏️ Implement your client and include a few screenshots of the final version of the client to show that meets the requirements
+
+Auxiliary Service
+Please, note that if you are deploying your WEB API as instructed in Exercise 3, you do not need to complete this task.
+
+Service description
+Overview
+📑  Content that must be included in the section
+You must provide a description of the service. You must clarify which are the goals of the service and how it interacts with your API (and possibly the client). The service can be autonomous entity that does some automated work on the API (data cleaning, calculating composites etc.), or it can be commanded from the client interface to perform heavier tasks that would clog the API server itself (statistics generation, recommendation algorithms etc.).
+✏️ Write your description here
+
+Functional requirements
+📑  Content that must be included in the section
+Provide a diagram that shows how the service communicates with other parts in the ecosystem.
+✏️ Put your diagram here
+
+Auxiliary service implementation
+💻     TODO: SOFTWARE TO DELIVER IN THIS SECTION
+The code repository must contain:
+The source code for the auxiliary service. 
+External libraries. You can also report them in the README.md if the libraries are very big or need to be installed.
+The code for testing the service (if it exists).
+We recommend to include a set of scripts to run your service and tests (if they exist).
+A README.md file containing:
+Dependencies (external libraries)
+How to setup/install the service
+How to configure and run the service
+How to run the different tests of your service (if you have implemented unit testing)
+NOTE: Your code MUST be clearly documented. For each public method/function you must provide: a short description of the method, input parameters, output parameters, exceptions (when the application can fail and how to handle such fail). Check Exercise 4 for examples on how to document the code. Should be clear which is the code you have implemented yourself and which is the code that you have borrowed from other sources.
+✏️ Do not need to write anything here. Implement your service
+
+Web API production deployment
+NOTE: This section might have significant changes along the course, please stay tunned to possible modifications. They will be discussed in Discord / Lovelace
+
+Please, note that if you are creating an auxiliary service, you do not need to complete this task.
+
+Deployment architecture
+Overview
+📑  Content that must be included in the section
+You must provide an architecture diagram of the system ready for production deployment, including all the different components as well as their connections.
+✏️ Add your diagram here
+
+Tools description
+📑  Content that must be included in the section
+List all components you are using and a description of the role and functionality that this component has in the system. Explain why this component is necessary for and list alternatives.
+✏️ Add your text here
+
+Deployment
+💻 Content that must be included in this section
+You must deploy the Wep API in environment similar to the one proposed in Exercise 3 and show that is working      TODO: SOFTWARE TO DELIVER IN THIS SECTION The code repository must contain:
+Scripts needed to setup the environment and deploy the web apit 
+Software needed to create and maintain the certificates
+A README.md file containing:
+List of components that must be installed
+How to setup the environment
+How to deploy the web api into the environment
+How to run the different tests to check that your environment is properly configure
+Should be clear which is the code you have implemented yourself and which is the code that you have borrowed from other sources.
+📝 Do not need to write anything here. Deploy your API and include all necessary files in the repository
+
+points	details https://lovelace.oulu.fi/ohjelmoitava-web/ohjelmoitava-web/pwp-deliverable-5/
+1. Client Description	3.0	
+	Overview	1.0	The overview explains what the client does, and why you wanted to build this particular client. There is also a clear description or table that shows what resources and which methods are accessed by the client.
+	Use Case Diagram	1.0	The diagram shows all use cases for the client.
+	GUI Layout	0.5	The presented diagram(s) clearly show the layout of the client, including all of its screens. Terminal clients can only get full points point from this section if the structure of the text is completely clear, easy to read and/or use textual GUI libraries such as ncurses.
+	Screen Workflow	0.5	The workflow diagram communicates the transitions between different screens in the client application clearly. The workflow doesn't have any unnecessary hoops.
+2. Client Implementation	11.5	
+	Instructions	1.0	The readme.md of the project or client repository has complete instructions on how to install, setup and run the client.
+	Sources Cited and Code documentation.	0.5	If code from outside sources, incuding the course material, is used, these sources are properly credited and linked to.Code functions are correctly documented
+	Code Quality	1.5	The code has good structure, clear naming for variables, and follows good practices for the chosen language. Linting tool is also used for evaluating this bullet.If you are using a different tool than python, be sure that you use proper linting tool. If no linting tool used, you can only get 0.75 point
+	Demonstration	2.5	Demonstration goes through all client features, is well organized and runs smoothly (no failures)
+	Error Handling	2.0	All client features work without errors. Client also either makes it impossible to make invalid API calls, or presents the error code responses in an informative manner to the user.
+	Usability	1.0	The user experience of the client is smooth.
+	Visuals	1.0	The client looks nice, i.e. some effort has been put into the layout and selection of colors, fonts etc.
+	Complexity/Features	2.0	The client does more than just provide a direct mapping to API calls and/or has some other neat extra features, like using a third party API.
+3. Client Hypermedia	2.0	
+	Uses Link Relations	1.0	The client always uses link relation names to find the control it's looking for, and always takes the address from the hypermedia control. Hard-coded URLs are nowhere to be found.
+	Uses Schemas	1.0	All POST/PUT/PATCH method calls use the schema provided by the API to generate a form or series of prompts dynamically. Schema types and formats are used to generate different widgets.
+4a. Auxiliary Service (ONLY COUNTED IF NO DEPLOYMENT)	11.5	
+	Idea	1.0	You have a clear idea for the auxiliary service, and it does something that could be considered inconvenient to do on the API server itself. Like our example, it can be just an approximation of such behavior - the interaction part is what counts. You must justify explicitly in your documentation why this service is necessary and how using directly the API might be problematic.
+	Overview	1.0	The overview is clearly written and describes the purpose of the service in relation to other components in the ecosystem
+	Communication Diagram	1.5	The diagram shows how services in the ecosystem are connected, including what type of communication is used between them.
+	Instructions	1.0	The readme.md file for the project or service repository includes full instructions on how to install, setup, and run the service, and connect it to the main API.
+	Code Structure	1.0	The service has good code structure, and communicates with other components in a smart way.
+	API implementation	2.5	The API of the service is correctly design and implemented according to the chosen architecture. The chosen API architecture is correcly justified
+	Code Quality	1.0	Code follows good practices for the chosen programming language and other tools. Linting tool is also used for evaluating this bullet. If Python is not used be sure that you try proper linting software.If not linting is used max grade is 0.5
+	Demonstration	2.5	You are able to give a clear demonstration of the service in action. The service does not have meaningful errors.
+4b. Production Deployment (ONLY COUNTED IF NOT AUXILIARY SERVICE)	11.5	
+	Architecture diagram	2.0	The diagram present clearly which are the different parts of the ecosystem, where the different services are deployed. It should contain the different component as well as their connection. Include econnection protocols.
+	Tools description	1.5	Include a list of all tools and frameworks utilized, and what is the role in the environment (e.g. docker, supervisor ...)
+	Use of Application Server	1.5	The application is running in a proper Application Server (Gunicorn, Tomcat). The chosen of the application server is justified.The application server is correctly configured.
+	Monitor and control system	1.0	The deployment uses proper control and monitor systems (e.g. superviosor)
+	Web Server	1.0	The API is running in a proper Web Server (NGINX or Apache). The server is correctly configured
+	VM/Docker	2.5	The API is running in its own VM or Docker environment. Configuration is correct.
+	Deployment in the cloud	2.0	The API is deployed in the cloud and accessible through a public IP

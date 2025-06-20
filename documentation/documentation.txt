@@ -1,0 +1,152 @@
+PWP Courses: https://lovelace.oulu.fi/ohjelmoitava-web/pwp-spring-2025/ 
+
+Here is our state diagram
+stateDiagram-v2
+    [*] --> UsersCollection: "GET /users"
+    UsersCollection --> UserItem: "POST /users/register - _links self /users/{id}"
+    UsersCollection --> UserItem: "GET /users/{id} - _links self /users/{id}, entries /users/{id}/entries"
+    UserItem --> EntriesCollection: "GET /users/{id}/entries - _links self /users/{id}/entries, user /users/{id}"
+    UserItem --> UserItem: "PUT /users/{id} - Update user - _links self /users/{id}"
+    UserItem --> UserItem: "DELETE /users/{id} - Delete user"
+    UserItem --> [*]: "User deleted"
+    EntriesCollection --> EntryItem: "POST /entries - _links self /entries/{id}"
+    EntriesCollection --> EntryItem: "GET /entries/{id} - _links self /entries/{id}, comments /entries/{id}/comments, user /users/{id}"
+    EntriesCollection --> EntriesCollection: "GET /entries - List all entries - _links self /entries, user /users/{id}"
+    EntryItem --> EntryItem: "PUT /entries/{id} - Update entry - _links self /entries/{id}"
+    EntryItem --> EntryItem: "DELETE /entries/{id} - Delete entry"
+    EntryItem --> CommentsCollection: "GET /entries/{id}/comments - _links self /entries/{id}/comments, entry /entries/{id}"
+    EntryItem --> EditHistoryCollection: "GET /entries/{id}/edit_history - _links self /entries/{id}/edit_history, entry /entries/{id}"
+    CommentsCollection --> CommentItem: "POST /entries/{id}/comments - _links self /comments/{comment_id}"
+    CommentsCollection --> CommentItem: "GET /comments/{comment_id} - _links self /comments/{comment_id}, entry /entries/{id}"
+    CommentsCollection --> CommentsCollection: "GET /entries/{id}/comments - List comments - _links self /entries/{id}/comments"
+    CommentItem --> CommentItem: "PUT /comments/{comment_id} - Update comment - _links self /comments/{comment_id}"
+    CommentItem --> CommentItem: "DELETE /comments/{comment_id} - Delete comment"
+    CommentItem --> [*]: "Comment deleted"
+    EditHistoryCollection --> EditHistoryItem: "GET /entries/{id}/edit_history/{edit_id} - _links self /entries/{id}/edit_history/{edit_id}, entry /entries/{id}"
+    EditHistoryCollection --> EditHistoryCollection: "GET /entries/{id}/edit_history - List edit history - _links self /entries/{id}/edit_history"
+    EditHistoryItem --> [*]: "View only"
+    EntryItem --> [*]: "Entry deleted"
+
+
+Important information for Deadline 1: https://github.com/programmable-web-project-unioulu/PWP/wiki/API-description 
+‼️  This chapter should be completed by Deadline 1 (see course information at Lovelace)
+
+📑  Chapter summary
+This chapter must provide a good overview of the Web API that your group is going to develop during the course, and some insight into the (imaginary) microservice architecture it will be a part of. You should not focus in implementation aspects such as database structure, interfaces or the request/responses formats. We recommend that you look into existing APIs (see Related work below) before writing the description for your own API.
+Chapter GOALS:
+Understand what is an API
+Describe the project topic API
+Describe how the API would be used as part of a larger architecture
+✔️     Chapter evaluation (max 5 points)
+You can get a maximum of 5 points after completing this Chapter. More detailed evaluation is provided in the evaluation sheet in Lovelace.
+RESTful API description
+Overview
+📑  Content that must be included in the section
+Describe the API you are going to implement. Also describe the larger imaginary architecture that would exist around that API - while you do not need to implement these other components, they will be helpful in imagining context for your API. Your API will be a component that stores, and offers an interface to, some important data in the larger ecosystem. Think about a larger system, and then take out one key piece to examine - this will be your API.
+
+Describe the API briefly and comment what is the main functionality that it exposes. Focus in the API not in any specific application that is using this API. Take into account that in the end, a WEB API is an encapsulated functionality as well as the interface to access that functionality. Remember that your API is just one part of a larger machine. It does not need to do everything. There will be other components in the system to do those things. This course focuses on creating a small API in detail - thinking too big from the start will drown you in work later.
+
+A really short version of an overview for the RESTful Web API could be:
+
+“The discussion forum Web API offers different functionalities to structure non-real-time conversations among the people of a group about topics they are interested in certain topic. Messages are grouped in Threads, that at the same time are grouped in Topics. The messages are accessible to anyone, but posts can only be created by providing credentials of a registered user [...] This API could exist as part of an online learning environment system where it is responsible for offering discussion forum features that can be included in other components of the learning environment. For example, a programming task (managed by a different component) can include its own discussion board managed by the discussion forum API[...]“
+
+✏️ Write your description here
+
+Main concepts and relations
+📑  Content that must be included in the section
+Define the main concepts and describe the relations among them textually. Roughly, a concept is a real-world entity that is expected to be of interest to users or other services. This section will be a guideline for choosing your resources to implement in Deadline 3. Students should remember that some of the concepts might not be a resource by themselves, but just a part of it (resource property). In this section, students should not describe the RESTful resources, but identify which are the main ideas of the API. Do not forget to include the relations among the concepts.
+A description of the main concepts for the Forum API could be:
+
+"The API permits users send messages. The forum contains a list of categories and a list of users. Each category specifies a name, a description and a thread. A thread is [...]The forum may contain 0 or more categories… Each category may have 0 or more threads… Users can write and read messages to a forum thread. A user has a profile, basic information, activity information (stores, for instance, all the messages sent by a user, the messages marked as favorites). [...]The user history contains information of the last 30 messages sent by the user.[…]"
+
+Include a diagram which shows the relations among concepts.
+
+This section is important because it outlines the concepts that you will later implement. In particular, the diagram defined here will follow you throughout the project report and you will be adding more details to it.
+
+✏️ Write your text here and draw the diagram
+
+API uses
+📑  Content that must be included in the section
+Describe at least one client and one service that could use your Web API. You must explain here what is the functionality provided by the client/service, and how it uses the Web API to implement this functionality.
+✏️ Write your text here
+
+Related work
+📑  Content that must be included in the section
+Find at least one API that resembles the functionality provided by yours. Explain in detail the functionality provided by the API. Classify the API according to its type (RPC, CRUD REST, pure REST, hypermedia driven ...) justifying your selection. Provide at least one example client that uses this API.
+The purpose of this task is to get more familiar with what an API is. This will be helpful in describing your own API. Therefore, it is recommended to do this section after you have decided the topic of your project but before writing your API description.
+
+✏️ Write your text here
+
+points	details
+1. API overview	1.0	
+	Description quality	0.5	The description is cohesive, and establishes motivation for making the API.
+	Desribed as API	0.5	The description clearly describes an API, as part of a larger system.
+2. Main concepts	1.5	
+	Concepts are clear	1.0	The key concepts can be easily picked up from the description, and relations between them are also apparent. The concepts are described as addressable objects exposed through the API
+	Diagram	0.5	The diagram exists and makes relations between the main concepts clear.
+3. API uses	1.5	
+	Descriptions are clear	1.0	The client/service descriptions in this section are clearly written. They are described as API clients, with focus on what parts of the API they use and how. The purpose of each component is also clear.
+	Client and service	0.5	At least one example of both human usable client, and a machine-to-machine service are provided.
+4. Related work	1.0	
+	Description quality	0.75	The description classifies the API properly and explains it in terms of what it offers to clients.
+	Client example	0.25	An example of a client that uses the API is also provided. The client is described in terms of how it interacts with the API, and what it offers to potential users.
+Put the project wiki link here. 
+Enter your answer here
+
+ You have already answered this task correctly.
+<<
+<<
+
+
+Important information for Deadline 2 https://github.com/programmable-web-project-unioulu/PWP/wiki/Database
+‼️  This chapter should be completed by Deadline 2 (see course information at Lovelace)
+
+📑  Chapter summary
+In this section students must design and implement the database structure (mainly the data model).
+In this section you must implement:
+
+The database table structure.
+The data models (ORM)
+Data models access methods (if needed)
+Populating the database using the models you have created
+In this section you should aim for a high quality small implementation instead of implementing a lot of features containing bugs and lack of proper documentation.
+SECTION GOALS:
+Understand database basics
+Understand how to use ORM to create database schema and populate a database
+Setup and configure database
+Implement database backend
+✔️     Chapter evaluation (max 5 points)
+You can get a maximum of 5 points after completing this section. More detailed evaluation is provided in the evaluation sheet in Lovelace.
+Database design and implementation
+Database design
+📑  Content that must be included in the section
+Describe your database. The documentation must include:
+A name and a short description of each database model. Describe in one or two sentences what the model represents.
+An enumeration of the attributes (columns) of each model. Each attribute must include:
+Its type and restrictions (values that can take)
+A short description of the attribute whenever the name is not explicit enough. E.g. If you are describing the users of a "forum", it is not necessary to explain the attributes "name", "surname" or "address"
+because their meanings are obvious.
+Characteristics of this attribute (e.g. if it is unique, if it contains default values)
+Connection with other models (primary keys and foreign keys)
+Other keys
+You can use the table skeleton provided below
+For this section you can use a visual tool to generate a diagram. Be sure that the digram contains all the information provided in the models. Some tools you can use include: https://dbdesigner.net/, https://www.lucidchart.com/pages/tour/ER_diagram_tool, https://dbdiffo.com/
+
+✏️ The table can have the following structure
+
+Name	Type	Restrictions	Description	Characteristics	Links
+Name of the attribute	Attribute type	Values that the type can take	Description of the attribute	Uniquenes, default...	keys and foreign keys
+✏️ Do not forget to include a diagram presenting the relations
+
+Database implementation
+💻     TODO: SOFTWARE TO DELIVER IN THIS SECTION
+The code repository must contain:
+The ORM models and functions
+A .sql dump (or similar data structure) of a database or the .db file (if you are using SQlite). The provided document must contain enough information to replicate your database. You must provide a populated database in order to test your models.
+The scripts used to generate your database (if any)
+A README.md file containing:
+All dependencies (external libraries) and how to install them
+Define database (MySQL, SQLite, MariaDB, MongoDB...) and version utilized
+Instructions how to setup the database framework and external libraries you might have used, or a link where it is clearly explained.
+Instructions on how to setup and populate the database.
+If you are using python a `requirements.txt` with the dependencies

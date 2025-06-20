@@ -1,0 +1,121 @@
+PWP Courses: https://lovelace.oulu.fi/ohjelmoitava-web/pwp-spring-2025/ 
+
+Here is our state diagram
+stateDiagram-v2
+    [*] --> UsersCollection: "GET /users"
+    UsersCollection --> UserItem: "POST /users/register - _links self /users/{id}"
+    UsersCollection --> UserItem: "GET /users/{id} - _links self /users/{id}, entries /users/{id}/entries"
+    UserItem --> EntriesCollection: "GET /users/{id}/entries - _links self /users/{id}/entries, user /users/{id}"
+    UserItem --> UserItem: "PUT /users/{id} - Update user - _links self /users/{id}"
+    UserItem --> UserItem: "DELETE /users/{id} - Delete user"
+    UserItem --> [*]: "User deleted"
+    EntriesCollection --> EntryItem: "POST /entries - _links self /entries/{id}"
+    EntriesCollection --> EntryItem: "GET /entries/{id} - _links self /entries/{id}, comments /entries/{id}/comments, user /users/{id}"
+    EntriesCollection --> EntriesCollection: "GET /entries - List all entries - _links self /entries, user /users/{id}"
+    EntryItem --> EntryItem: "PUT /entries/{id} - Update entry - _links self /entries/{id}"
+    EntryItem --> EntryItem: "DELETE /entries/{id} - Delete entry"
+    EntryItem --> CommentsCollection: "GET /entries/{id}/comments - _links self /entries/{id}/comments, entry /entries/{id}"
+    EntryItem --> EditHistoryCollection: "GET /entries/{id}/edit_history - _links self /entries/{id}/edit_history, entry /entries/{id}"
+    CommentsCollection --> CommentItem: "POST /entries/{id}/comments - _links self /comments/{comment_id}"
+    CommentsCollection --> CommentItem: "GET /comments/{comment_id} - _links self /comments/{comment_id}, entry /entries/{id}"
+    CommentsCollection --> CommentsCollection: "GET /entries/{id}/comments - List comments - _links self /entries/{id}/comments"
+    CommentItem --> CommentItem: "PUT /comments/{comment_id} - Update comment - _links self /comments/{comment_id}"
+    CommentItem --> CommentItem: "DELETE /comments/{comment_id} - Delete comment"
+    CommentItem --> [*]: "Comment deleted"
+    EditHistoryCollection --> EditHistoryItem: "GET /entries/{id}/edit_history/{edit_id} - _links self /entries/{id}/edit_history/{edit_id}, entry /entries/{id}"
+    EditHistoryCollection --> EditHistoryCollection: "GET /entries/{id}/edit_history - List edit history - _links self /entries/{id}/edit_history"
+    EditHistoryItem --> [*]: "View only"
+    EntryItem --> [*]: "Entry deleted"
+
+Important information for Deadline 4 https://github.com/programmable-web-project-unioulu/PWP/wiki/API-documentation-and-hypermedia
+‼️  This chapter should be completed by Deadline 4 (see course information at Lovelace)
+
+📑  Chapter summary
+In this chapter, the students must modify their API to use hypermedia following REST principles and document their RESTful API. The minimum requirements are summarized in the Minimum Requirements section of the Project Work Assignment. Note that if you do not meet Minimum Requirements this section wont be evaluated.
+SECTION GOALS:
+Understand connectedness and/or hypermedia
+Write API documentation
+You have two options:
+
+Implement the API using a non-hypermedia format (RESTful CRUD). In this case, it is recommended that all your resources are connected (linking to other resources). Anyhow, you cannot get full points in this section if you do not design your API using an hypermedia format
+Using an hypermedia format. Lots of examples provided in Extra material for Exercise 3. You can get full points. In this case you need to clearly include in the documentation a profile with link relations and semantic descriptors.
+✔️     Chapter evaluation (max 16 points)
+You can get a maximum of 16 points after completing this section. More detailed evaluation is provided in the evaluation sheet in Lovelace.
+Hypermedia
+Resource relations
+📑  Content that must be included in the section
+Include a state diagram of your application, with all the application states. Each resource must be an application state. Describe also the state transitions. To build this diagram you should reuse the diagram created in DL1. You can use online tools such as draw.io or lucidchart to create the diagrams. You have an example in the following image
+
+
+✏️ Draw here your state machine diagram
+
+Hypermedia implementation
+💻     TODO: SOFTWARE TO DELIVER IN THIS SECTION
+The code repository must contain:
+The source code of the RESTful API incorporating hypermedia. The source coude should be documented using the same quality criteria in Deliverable 3. Please, remember to include original source if you have not written the code (even if you have used an AI).
+Necessary scripts to run your server
+The README.md file with all the information described in the Deliverable 3.
+✏️ You do not need to write anything in this section, just complete the implementation.
+
+RESTful API testing using hypermedia
+💻     TODO: SOFTWARE TO DELIVER IN THIS SECTION
+The code repository must contain:
+The code to test your RESTful API (Functional test)
+The code of the test MUST be commented indicating what you are going to test in each test case.
+The test must include values that force error messages
+The external libraries that you have used
+We recommend to include a set of scripts to execute your tests.
+A database file or the necessary files and scripts to automatically populate your database.
+A README.md file containing:
+Dependencies (external libraries)
+Instructions on how to run the different tests for your application.
+Do not forget to include in the README.md the instructions on how to run your tests. Discuss briefly which were the main errors that you detected thanks to the functional testing.
+Remember that you MUST implement a functional testing suite. A detailed description of the input / output in the a REST client plugin.
+
+In this section it is your responsibility that your API handles requests correctly. All of the supported methods for each resource should work. You also need to show that invalid requests are properly handled, and that the response codes are correct in each situation.
+
+✏️ Most important part of this section is completing the implementation. Write down here a short reflection on the main errors you have solved thanks to the functional tests.
+
+Justification on Hypermedia Implementation
+📑  Content that must be included in this section. Fill this section if your API uses hypermedia
+Declare your chosen mediatype, and provide your reasoning for choosing that mediatype. For each custom link relation defined in your API's namespace, explain why it was needed (i.e. why there wasn't a suitable relation in the IANA standard). Explain how Connectedness is achieved in your API.
+✏️ Write your text here
+
+RESTful API documentation
+API Documentation
+📑  Content that must be included in the section
+Use any of the tools presented in Exercise 3 to document the API.
+
+For all resources you must cover:
+
+The possible HTTP methods exposed by this resource
+The headers in the request and responses
+The media type utilized (in the response Content-Type header). If you are utilizing your own media-type you must describe it in the section Own media type implementation.
+The format of the HTTP request body (just for PUT/POST), providing a clear example. If necessary, comment the example.
+The format of the HTTP response body, providing a clear example. If necessary, comment the example.
+The error conditions, status code and format of the error response, providing a clear example.
+If you are using an hypermedia type you must provide the profile utilized, including:
+Link relations. Include methods and format of the requests if they are defined in the media type. Use as much as possible IANA defined relations.
+Semantic descriptors. If you utilize a descriptor used in some other profile (e.g. schema.org) provide the link.
+If you are extending other profiles, do not forget to link to the extended profile.
+✏️ Put the link to your API documentation here
+
+
+
+points	details https://lovelace.oulu.fi/ohjelmoitava-web/ohjelmoitava-web/pwp-deliverable-4/
+1. Documentation	9.0	
+	Documentation is valid	1.0	Validator for the documentation passes without any problems. E.g. if you paste your documentation into the Swagger Editor, it shows no errors/warnings.
+	Documentation structure	1.0	The documentation uses good structure to support its maintainability. Everything is only defined in one place. If either $parameters, $schemas, or $securityschemas are not in root:0.5. If no reference at all 0 points.
+	Documentation coverage	1.5	Every path is documented, and every available method for each path is also documented. 0.75 if there are some paths and methods missing or there is a minor mismatch between implementation and coverage
+	Response examples	2.5	All necessary examples are shown for each response body in the documentation. This includes different variations for resources that can have highly varying information. 1.5 if only one possibility is considered. 0.5 if there are multiple response bodies missing
+	Response codes	2.0	The documentation covers all response codes from the API, including error codes. Correct error codes are used for everything. 1.0 if there are a few missing error codes or the codes are using wrongly. 0.5 if error codes are not used at all.
+	Request bodies	1.0	Enough information about how to form request bodies is included in each request in the documentation. At minimum schema is included, examples are also included if needed.
+2. Hypermedia Design	3.0	
+	State diagram	1.5	The state diagram exists. Standard link relations are used correctly, and custom link relations are used only if needed.
+	Custom link relations	0.5	Custom link relations are explained, and they are correctly justified. Custom link relations are included where needed.
+	Connectedness	1.0	The state diagram achieves full connectedness - there are no deadends or isolated resources
+3. Hypermedia Implementation	4.0	
+	Control implementation	1.5	Each control provides all of the information necessary to make the request. In particular, pay attention to including a correct schema in the control that clients can use to generate a form that will result in a valid request.
+	Implementation works	0.5	The implementation works, as shown by a demonstration. The reviewer doesn't find any problems in the code.
+	Testing coverage	1.0	Test coverage in relevant files is 96% or higher for 1.0 p, 91-95% for 0.75, 85-90% for 0,25p.
+	Link relations match design	1.0	Link relations in the hypermedia controls match the state diagram.
