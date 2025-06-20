@@ -5,3 +5,4 @@ marshmallow
 psycopg2-binary
 sqlalchemy
 pytest
+pylint

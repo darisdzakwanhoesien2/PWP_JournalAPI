@@ -1,23 +1,53 @@
 ## current code
 from flask import Blueprint, request, jsonify, abort
 from flask_jwt_extended import jwt_required
-from flask_caching import Cache
 from marshmallow import ValidationError
 from src.data_store import load_entries, save_entries, load_comments, save_comments, load_edit_history, save_edit_history, get_next_id
-from src.models import Entry, Comment, EditHistory
+from src.models_orm import Entry, Comment, EditHistory
 from src.utils import entry_links, entries_collection_links, comment_links, comments_collection_links, edit_history_links, edit_history_collection_links
 from src.schemas import EntrySchema, CommentSchema, EditHistorySchema
 from src.cache import cache
+
+"""
+Entry-related API routes module.
+"""
 
 entries_bp = Blueprint('entries', __name__)
 entry_schema = EntrySchema()
 comment_schema = CommentSchema()
 edit_history_schema = EditHistorySchema()
 
+def _build_entry_response(entry):
+    """
+    Helper function to build entry response dictionary with links.
+    """
+    entry_dict = entry.to_dict()
+    entry_dict['_links'] = entry_links(entry.id, entry.user_id)
+    return entry_dict
+
+def _build_comment_response(comment, entry_id):
+    """
+    Helper function to build comment response dictionary with links.
+    """
+    comment_dict = comment.to_dict()
+    comment_dict['_links'] = comment_links(comment.id, entry_id=entry_id)
+    return comment_dict
+
+def _build_edit_history_response(edit, entry_id):
+    """
+    Helper function to build edit history response dictionary with links.
+    """
+    edit_dict = edit.to_dict()
+    edit_dict['_links'] = edit_history_links(entry_id, edit.id)
+    return edit_dict
+
 @entries_bp.route('', methods=['GET'])
 @jwt_required()
 @cache.cached(timeout=300)
 def get_entries():
+    """
+    Retrieve a list of all entries.
+    """
     entries_data = load_entries()
     entries = [Entry.from_dict(e) for e in entries_data]
     result = []
@@ -34,6 +64,9 @@ def get_entries():
 @entries_bp.route('', methods=['POST'])
 @jwt_required()
 def create_entry():
+    """
+    Create a new entry.
+    """
     json_data = request.get_json()
     if not json_data:
         abort(400, description='No input data provided')
@@ -54,6 +87,9 @@ def create_entry():
 @jwt_required()
 @cache.cached(timeout=300)
 def get_entry(id):
+    """
+    Retrieve an entry by ID.
+    """
     entries_data = load_entries()
     entry_data = next((e for e in entries_data if e['id'] == id), None)
     if not entry_data:
@@ -66,6 +102,9 @@ def get_entry(id):
 @entries_bp.route('/<int:id>', methods=['PUT'])
 @jwt_required()
 def update_entry(id):
+    """
+    Update an entry's information.
+    """
     json_data = request.get_json()
     if not json_data:
         abort(400, description='No input data provided')
@@ -105,6 +144,9 @@ def update_entry(id):
 @entries_bp.route('/<int:id>', methods=['DELETE'])
 @jwt_required()
 def delete_entry(id):
+    """
+    Delete an entry by ID.
+    """
     entries_data = load_entries()
     entry_index = next((i for i, e in enumerate(entries_data) if e['id'] == id), None)
     if entry_index is None:
@@ -117,6 +159,9 @@ def delete_entry(id):
 @jwt_required()
 @cache.cached(timeout=300)
 def get_entries_by_user(id):
+    """
+    Retrieve entries by user ID.
+    """
     entries_data = load_entries()
     user_entries = [Entry.from_dict(e) for e in entries_data if e['user_id'] == id]
     result = []
@@ -134,6 +179,9 @@ def get_entries_by_user(id):
 @jwt_required()
 @cache.cached(timeout=300)
 def get_comments(id):
+    """
+    Retrieve comments for an entry.
+    """
     comments_data = load_comments()
     entry_comments = [Comment.from_dict(c) for c in comments_data if c['entry_id'] == id]
     result = []
@@ -150,6 +198,9 @@ def get_comments(id):
 @entries_bp.route('/<int:id>/comments', methods=['POST'])
 @jwt_required()
 def add_comment(id):
+    """
+    Add a comment to an entry.
+    """
     import logging
     json_data = request.get_json()
     if not json_data:
@@ -175,6 +226,9 @@ def add_comment(id):
 @jwt_required()
 @cache.cached(timeout=300)
 def get_comment(comment_id):
+    """
+    Retrieve a comment by ID.
+    """
     comments_data = load_comments()
     comment_data = next((c for c in comments_data if c['id'] == comment_id), None)
     if not comment_data:
@@ -187,6 +241,9 @@ def get_comment(comment_id):
 @entries_bp.route('/comments/<int:comment_id>', methods=['PUT'])
 @jwt_required()
 def update_comment(comment_id):
+    """
+    Update a comment by ID.
+    """
     import logging
     logging.info(f"Request headers: {dict(request.headers)}")
     logging.info(f"Request json: {request.get_json()}")
@@ -215,6 +272,9 @@ def update_comment(comment_id):
 @entries_bp.route('/comments/<int:comment_id>', methods=['DELETE'])
 @jwt_required()
 def delete_comment(comment_id):
+    """
+    Delete a comment by ID.
+    """
     import logging
     logging.info(f"Request headers: {dict(request.headers)}")
     comments_data = load_comments()
@@ -231,6 +291,9 @@ def delete_comment(comment_id):
 @jwt_required()
 @cache.cached(timeout=300)
 def get_edit_history(id):
+    """
+    Retrieve edit history for an entry.
+    """
     edit_history_data = load_edit_history()
     entry_edit_history = [EditHistory.from_dict(e) for e in edit_history_data if e['entry_id'] == id]
     result = []
@@ -248,6 +311,9 @@ def get_edit_history(id):
 @jwt_required()
 @cache.cached(timeout=300)
 def get_edit_history_item(id, edit_id):
+    """
+    Retrieve a specific edit history item by ID.
+    """
     edit_history_data = load_edit_history()
     edit_data = next((e for e in edit_history_data if e['entry_id'] == id and e['id'] == edit_id), None)
     if not edit_data:

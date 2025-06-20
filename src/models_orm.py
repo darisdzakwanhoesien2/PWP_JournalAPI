@@ -17,6 +17,31 @@ class User(Base):
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', email='{self.email}')>"
 
+    @classmethod
+    def from_dict(cls, data):
+        return cls(
+            id=data.get('id'),
+            username=data.get('username'),
+            email=data.get('email'),
+            registered_at=data.get('registered_at')
+        )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'username': self.username,
+            'email': self.email,
+            'registered_at': self.registered_at.isoformat() if self.registered_at else None
+        }
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'username': self.username,
+            'email': self.email,
+            'registered_at': self.registered_at.isoformat() if self.registered_at else None
+        }
+
 class Entry(Base):
     __tablename__ = 'entries'
 
@@ -34,6 +59,27 @@ class Entry(Base):
     def __repr__(self):
         return f"<Entry(id={self.id}, title='{self.title}', user_id={self.user_id})>"
 
+    @classmethod
+    def from_dict(cls, data):
+        return cls(
+            id=data.get('id'),
+            user_id=data.get('user_id'),
+            title=data.get('title'),
+            content=data.get('content'),
+            created_at=data.get('created_at'),
+            updated_at=data.get('updated_at')
+        )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'title': self.title,
+            'content': self.content,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
 class Comment(Base):
     __tablename__ = 'comments'
 
@@ -50,6 +96,27 @@ class Comment(Base):
     def __repr__(self):
         return f"<Comment(id={self.id}, entry_id={self.entry_id}, user_id={self.user_id})>"
 
+    @classmethod
+    def from_dict(cls, data):
+        return cls(
+            id=data.get('id'),
+            entry_id=data.get('entry_id'),
+            user_id=data.get('user_id'),
+            content=data.get('content'),
+            created_at=data.get('created_at'),
+            updated_at=data.get('updated_at')
+        )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'entry_id': self.entry_id,
+            'user_id': self.user_id,
+            'content': self.content,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
 class EditHistory(Base):
     __tablename__ = 'edit_history'
 
@@ -62,3 +129,20 @@ class EditHistory(Base):
 
     def __repr__(self):
         return f"<EditHistory(id={self.id}, entry_id={self.entry_id})>"
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls(
+            id=data.get('id'),
+            entry_id=data.get('entry_id'),
+            edited_at=data.get('edited_at'),
+            changes=data.get('changes')
+        )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'entry_id': self.entry_id,
+            'edited_at': self.edited_at.isoformat() if self.edited_at else None,
+            'changes': self.changes
+        }

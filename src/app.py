@@ -9,7 +9,14 @@ from src.routes_entries import entries_bp
 from src.cache import cache
 from src.models_orm import Base
 
+"""
+Main application factory and setup for the Flask API.
+"""
+
 def create_app():
+    """
+    Create and configure the Flask application.
+    """
     app = Flask(__name__)
     app.config["JWT_SECRET_KEY"] = "super-secret-key"  # Change this in production
     if app.testing:
@@ -34,10 +41,16 @@ def create_app():
 
     @app.teardown_appcontext
     def remove_session(exception=None):
+        """
+        Remove the database session at the end of the request or app context.
+        """
         app.db_session.remove()
 
     @app.route('/login', methods=['POST'])
     def login():
+        """
+        Simple login endpoint to create JWT access token.
+        """
         data = request.get_json()
         if not data or 'username' not in data:
             return jsonify({"msg": "Missing username parameter"}), 400
