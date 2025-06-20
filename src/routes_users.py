@@ -2,11 +2,11 @@
 from flask import Blueprint, request, jsonify, abort
 from flask_jwt_extended import jwt_required
 from marshmallow import ValidationError
-from src.data_store import load_users, save_users, get_next_id
-from src.models_orm import User
-from src.utils import user_links, users_collection_links
-from src.schemas import UserSchema
-from src.cache import cache
+from data_store import load_users, save_users, get_next_id
+from models_orm import User
+from utils import user_links, users_collection_links
+from schemas import UserSchema
+from cache import cache
 
 """
 User-related API routes module.

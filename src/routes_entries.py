@@ -2,11 +2,11 @@
 from flask import Blueprint, request, jsonify, abort
 from flask_jwt_extended import jwt_required
 from marshmallow import ValidationError
-from src.data_store import load_entries, save_entries, load_comments, save_comments, load_edit_history, save_edit_history, get_next_id
-from src.models_orm import Entry, Comment, EditHistory
-from src.utils import entry_links, entries_collection_links, comment_links, comments_collection_links, edit_history_links, edit_history_collection_links
-from src.schemas import EntrySchema, CommentSchema, EditHistorySchema
-from src.cache import cache
+from data_store import load_entries, save_entries, load_comments, save_comments, load_edit_history, save_edit_history, get_next_id
+from models_orm import Entry, Comment, EditHistory
+from utils import entry_links, entries_collection_links, comment_links, comments_collection_links, edit_history_links, edit_history_collection_links
+from schemas import EntrySchema, CommentSchema, EditHistorySchema
+from cache import cache
 
 """
 Entry-related API routes module.
