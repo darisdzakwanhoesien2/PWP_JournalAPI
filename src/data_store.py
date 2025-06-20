@@ -45,10 +45,14 @@ def load_entries():
 def save_entries(entries):
     _save_data(ENTRIES_FILE, entries, entries_lock)
 
+import logging
+
 def load_comments():
+    logging.info(f"Loading comments from {COMMENTS_FILE}")
     return _load_data(COMMENTS_FILE, comments_lock)
 
 def save_comments(comments):
+    logging.info(f"Saving comments to {COMMENTS_FILE}: {comments}")
     _save_data(COMMENTS_FILE, comments, comments_lock)
 
 def load_edit_history():

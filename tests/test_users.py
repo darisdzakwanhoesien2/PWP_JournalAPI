@@ -8,6 +8,9 @@ class UsersTestCase(unittest.TestCase):
         self.app = create_app()
         self.client = self.app.test_client()
         self.app.testing = True
+        # Clear users data before tests
+        from src.data_store import save_users
+        save_users([])
         # Register a user and get token for protected endpoints
         self.client.post('/users/register', json={
             'username': 'testuser',

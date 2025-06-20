@@ -4,13 +4,17 @@ from flask_jwt_extended import JWTManager, create_access_token, jwt_required
 from flask_caching import Cache
 from src.routes_users import users_bp
 from src.routes_entries import entries_bp
+from src.cache import cache
 
 def create_app():
     app = Flask(__name__)
     app.config["JWT_SECRET_KEY"] = "super-secret-key"  # Change this in production
-    app.config["CACHE_TYPE"] = "SimpleCache"
-    app.config["CACHE_DEFAULT_TIMEOUT"] = 300
-    cache = Cache(app)
+    if app.testing:
+        app.config["CACHE_TYPE"] = "NullCache"
+    else:
+        app.config["CACHE_TYPE"] = "SimpleCache"
+        app.config["CACHE_DEFAULT_TIMEOUT"] = 300
+    cache.init_app(app)
     jwt = JWTManager(app)
 
     app.register_blueprint(users_bp, url_prefix='/users')

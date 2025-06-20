@@ -1,0 +1,10 @@
+[
+  {
+    "id": 1,
+    "user_id": 1,
+    "title": "Updated Title",
+    "content": "Updated content.",
+    "created_at": "2025-06-20T09:49:17.991900",
+    "updated_at": "2025-06-20T09:49:17.991900"
+  }
+]

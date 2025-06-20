@@ -7,12 +7,12 @@ from src.data_store import load_entries, save_entries, load_comments, save_comme
 from src.models import Entry, Comment, EditHistory
 from src.utils import entry_links, entries_collection_links, comment_links, comments_collection_links, edit_history_links, edit_history_collection_links
 from src.schemas import EntrySchema, CommentSchema, EditHistorySchema
+from src.cache import cache
 
 entries_bp = Blueprint('entries', __name__)
 entry_schema = EntrySchema()
 comment_schema = CommentSchema()
 edit_history_schema = EditHistorySchema()
-cache = Cache()
 
 @entries_bp.route('', methods=['GET'])
 @jwt_required()
@@ -150,18 +150,23 @@ def get_comments(id):
 @entries_bp.route('/<int:id>/comments', methods=['POST'])
 @jwt_required()
 def add_comment(id):
+    import logging
     json_data = request.get_json()
     if not json_data:
         abort(400, description='No input data provided')
+    # Inject entry_id from URL into json_data before validation
+    json_data['entry_id'] = id
     try:
         data = comment_schema.load(json_data)
     except ValidationError as err:
+        logging.error(f"Validation error in add_comment: {err.messages}")
         return jsonify(err.messages), 400
     comments_data = load_comments()
     new_id = get_next_id(comments_data)
     comment = Comment(id=new_id, entry_id=id, user_id=data['user_id'], content=data['content'])
     comments_data.append(comment.to_dict())
     save_comments(comments_data)
+    logging.info(f"Comment added: {comment.to_dict()}")
     comment_dict = comment.to_dict()
     comment_dict['_links'] = comment_links(comment.id, entry_id=id)
     return jsonify(comment_dict), 201
@@ -182,16 +187,22 @@ def get_comment(comment_id):
 @entries_bp.route('/comments/<int:comment_id>', methods=['PUT'])
 @jwt_required()
 def update_comment(comment_id):
+    import logging
+    logging.info(f"Request headers: {dict(request.headers)}")
+    logging.info(f"Request json: {request.get_json()}")
     json_data = request.get_json()
     if not json_data:
         abort(400, description='No input data provided')
     try:
         data = comment_schema.load(json_data, partial=True)
     except ValidationError as err:
+        logging.error(f"Validation error in update_comment: {err.messages}")
         return jsonify(err.messages), 400
     comments_data = load_comments()
+    logging.info(f"Updating comment with id {comment_id} (type {type(comment_id)}), current comments IDs: {[c['id'] for c in comments_data]}")
     comment_index = next((i for i, c in enumerate(comments_data) if c['id'] == comment_id), None)
     if comment_index is None:
+        logging.error(f"Comment with id {comment_id} not found for update")
         abort(404, description='Comment not found')
     comments_data[comment_index]['content'] = data['content']
     comments_data[comment_index]['updated_at'] = data.get('updated_at') or comments_data[comment_index].get('updated_at')
@@ -204,9 +215,13 @@ def update_comment(comment_id):
 @entries_bp.route('/comments/<int:comment_id>', methods=['DELETE'])
 @jwt_required()
 def delete_comment(comment_id):
+    import logging
+    logging.info(f"Request headers: {dict(request.headers)}")
     comments_data = load_comments()
+    logging.info(f"Deleting comment with id {comment_id} (type {type(comment_id)}), current comments IDs: {[c['id'] for c in comments_data]}")
     comment_index = next((i for i, c in enumerate(comments_data) if c['id'] == comment_id), None)
     if comment_index is None:
+        logging.error(f"Comment with id {comment_id} not found for deletion")
         abort(404, description='Comment not found')
     comments_data.pop(comment_index)
     save_comments(comments_data)

@@ -7,10 +7,10 @@ from src.data_store import load_users, save_users, get_next_id
 from src.models import User
 from src.utils import user_links, users_collection_links
 from src.schemas import UserSchema
+from src.cache import cache
 
 users_bp = Blueprint('users', __name__)
 user_schema = UserSchema()
-cache = Cache()
 
 @users_bp.route('', methods=['GET'])
 @jwt_required()
