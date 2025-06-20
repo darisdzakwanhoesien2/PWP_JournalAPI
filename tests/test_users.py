@@ -1,4 +1,3 @@
-## current code
 import unittest
 import json
 from src.app import create_app
@@ -14,7 +13,8 @@ class UsersTestCase(unittest.TestCase):
         # Register a user and get token for protected endpoints
         self.client.post('/users/register', json={
             'username': 'testuser',
-            'email': 'testuser@example.com'
+            'email': 'testuser@example.com',
+            'password': 'testpassword'
         })
         login_resp = self.client.post('/login', json={'username': 'testuser'})
         self.token = login_resp.get_json()['access_token']
@@ -23,7 +23,8 @@ class UsersTestCase(unittest.TestCase):
     def test_register_user(self):
         response = self.client.post('/users/register', json={
             'username': 'newuser',
-            'email': 'newuser@example.com'
+            'email': 'newuser@example.com',
+            'password': 'newpassword'
         })
         self.assertEqual(response.status_code, 201)
         data = response.get_json()
@@ -76,7 +77,8 @@ class UsersTestCase(unittest.TestCase):
         # Register a user to delete
         reg_resp = self.client.post('/users/register', json={
             'username': 'tobedeleted',
-            'email': 'tobedeleted@example.com'
+            'email': 'tobedeleted@example.com',
+            'password': 'testpassword'
         })
         user_id = reg_resp.get_json()['id']
         login_resp = self.client.post('/login', json={'username': 'tobedeleted'})

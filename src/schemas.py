@@ -1,30 +1,28 @@
-## current code
-from marshmallow import Schema, fields, validate, ValidationError
+"""Schemas for serializing and deserializing API data."""
+
+from marshmallow import Schema, fields, validate
+from marshmallow import ValidationError
 
 class UserSchema(Schema):
-    id = fields.Int(dump_only=True)
+    """Schema for User data."""
     username = fields.Str(required=True, validate=validate.Length(min=1))
     email = fields.Email(required=True)
-    registered_at = fields.DateTime(dump_only=True)
+    password = fields.Str(required=True, load_only=True, validate=validate.Length(min=6))
 
 class EntrySchema(Schema):
-    id = fields.Int(dump_only=True)
+    """Schema for Entry data."""
     user_id = fields.Int(required=True)
     title = fields.Str(required=True, validate=validate.Length(min=1))
     content = fields.Str(required=True)
-    created_at = fields.DateTime(dump_only=True)
-    updated_at = fields.DateTime(dump_only=True)
 
 class CommentSchema(Schema):
-    id = fields.Int(dump_only=True)
+    """Schema for Comment data."""
     entry_id = fields.Int(required=True)
     user_id = fields.Int(required=True)
     content = fields.Str(required=True)
-    created_at = fields.DateTime(dump_only=True)
-    updated_at = fields.DateTime(dump_only=True)
 
 class EditHistorySchema(Schema):
-    id = fields.Int(dump_only=True)
+    """Schema for Edit History data."""
     entry_id = fields.Int(required=True)
-    edited_at = fields.DateTime(dump_only=True)
-    changes = fields.Dict()
+    edited_at = fields.DateTime()
+    changes = fields.Str()

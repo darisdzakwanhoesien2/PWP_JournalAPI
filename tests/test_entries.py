@@ -18,7 +18,8 @@ class EntriesTestCase(unittest.TestCase):
         # Register a user and get token for protected endpoints
         self.client.post('/users/register', json={
             'username': 'testuser',
-            'email': 'testuser@example.com'
+            'email': 'testuser@example.com',
+            'password': 'testpassword'
         })
         users = load_users()
         self.user_id = users[0]['id'] if users else None
