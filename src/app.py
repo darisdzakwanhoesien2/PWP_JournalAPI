@@ -27,7 +27,6 @@ def create_app():
     cache.init_app(app)
 
     # SQLAlchemy setup
-    DATABASE_URL = "postgresql://user:password@localhost:5432/pwp_db"  # Update with actual credentials or env var
     DATABASE_URL = "sqlite:///pwp_db.sqlite3"  # Updated to use SQLite for easier setup
     engine = create_engine(DATABASE_URL)
     Base.metadata.create_all(engine)
