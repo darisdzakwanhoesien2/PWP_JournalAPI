@@ -7,9 +7,7 @@ from src.utils import entry_links, entries_collection_links, comment_links, comm
 from src.schemas import EntrySchema, CommentSchema, EditHistorySchema
 from src.cache import cache
 
-"""
-Module for entry-related API routes.
-"""
+"""Module for entry-related API routes."""
 
 entries_bp = Blueprint('entries', __name__)
 entry_schema = EntrySchema()

@@ -1,3 +1,5 @@
+"""Module for ORM models."""
+
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import relationship, declarative_base
@@ -25,14 +27,6 @@ class User(Base):
             email=data.get('email'),
             registered_at=data.get('registered_at')
         )
-
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'username': self.username,
-            'email': self.email,
-            'registered_at': self.registered_at.isoformat() if self.registered_at else None
-        }
 
     def to_dict(self):
         return {
