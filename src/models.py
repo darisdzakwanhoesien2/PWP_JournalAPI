@@ -6,8 +6,8 @@ from datetime import datetime
 class User:
     """Represents a user in the system."""
 
-    def __init__(self, user_id, username, email, registered_at=None):
-        self.id = user_id
+    def __init__(self, id, username, email, registered_at=None):
+        self.id = id
         self.username = username
         self.email = email
         self.registered_at = registered_at or datetime.utcnow().isoformat()
@@ -34,8 +34,8 @@ class User:
 class Entry:
     """Represents an entry or post created by a user."""
 
-    def __init__(self, entry_id, user_id, title, content, created_at=None, updated_at=None):
-        self.id = entry_id
+    def __init__(self, id, user_id, title, content, created_at=None, updated_at=None):
+        self.id = id
         self.user_id = user_id
         self.title = title
         self.content = content
@@ -68,8 +68,8 @@ class Entry:
 class Comment:
     """Represents a comment on an entry."""
 
-    def __init__(self, comment_id, entry_id, user_id, content, created_at=None, updated_at=None):
-        self.id = comment_id
+    def __init__(self, id, entry_id, user_id, content, created_at=None, updated_at=None):
+        self.id = id
         self.entry_id = entry_id
         self.user_id = user_id
         self.content = content
@@ -102,8 +102,8 @@ class Comment:
 class EditHistory:
     """Represents an edit history record for an entry."""
 
-    def __init__(self, edit_id, entry_id, edited_at=None, changes=None):
-        self.id = edit_id
+    def __init__(self, id, entry_id, edited_at=None, changes=None):
+        self.id = id
         self.entry_id = entry_id
         self.edited_at = edited_at or datetime.utcnow().isoformat()
         self.changes = changes or {}

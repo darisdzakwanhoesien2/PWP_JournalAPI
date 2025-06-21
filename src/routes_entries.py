@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify, abort
+from flask import Blueprint, request, jsonify, abort
 from flask_jwt_extended import jwt_required
 from marshmallow import ValidationError
 from src.data_store import load_entries, save_entries, load_comments, save_comments, load_edit_history, save_edit_history, get_next_id
