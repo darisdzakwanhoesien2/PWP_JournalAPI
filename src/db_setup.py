@@ -1,3 +1,5 @@
+"""Database setup and sample data population."""
+
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -10,11 +12,13 @@ engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
 
 def create_database():
+    """Create database tables."""
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     print("Database tables created.")
 
 def populate_database():
+    """Populate the database with sample data."""
     session = Session()
 
     # Create sample users

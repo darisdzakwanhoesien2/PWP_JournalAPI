@@ -7,6 +7,8 @@ from sqlalchemy.orm import relationship, declarative_base
 Base = declarative_base()
 
 class User(Base):
+    """ORM model for a user."""
+
     __tablename__ = 'users'
 
     id = Column(Integer, primary_key=True)
@@ -17,10 +19,12 @@ class User(Base):
     entries = relationship('Entry', back_populates='user', cascade='all, delete-orphan')
 
     def __repr__(self):
+        """Return a string representation of the User."""
         return f"<User(id={self.id}, username='{self.username}', email='{self.email}')>"
 
     @classmethod
     def from_dict(cls, data):
+        """Create a User instance from a dictionary."""
         return cls(
             id=data.get('id'),
             username=data.get('username'),
@@ -29,6 +33,7 @@ class User(Base):
         )
 
     def to_dict(self):
+        """Convert the User instance to a dictionary."""
         return {
             'id': self.id,
             'username': self.username,
@@ -37,6 +42,8 @@ class User(Base):
         }
 
 class Entry(Base):
+    """ORM model for an entry."""
+
     __tablename__ = 'entries'
 
     id = Column(Integer, primary_key=True)
@@ -51,10 +58,12 @@ class Entry(Base):
     edit_history = relationship('EditHistory', back_populates='entry', cascade='all, delete-orphan')
 
     def __repr__(self):
+        """Return a string representation of the Entry."""
         return f"<Entry(id={self.id}, title='{self.title}', user_id={self.user_id})>"
 
     @classmethod
     def from_dict(cls, data):
+        """Create an Entry instance from a dictionary."""
         return cls(
             id=data.get('id'),
             user_id=data.get('user_id'),
@@ -65,6 +74,7 @@ class Entry(Base):
         )
 
     def to_dict(self):
+        """Convert the Entry instance to a dictionary."""
         return {
             'id': self.id,
             'user_id': self.user_id,
@@ -75,6 +85,8 @@ class Entry(Base):
         }
 
 class Comment(Base):
+    """ORM model for a comment."""
+
     __tablename__ = 'comments'
 
     id = Column(Integer, primary_key=True)
@@ -88,10 +100,12 @@ class Comment(Base):
     user = relationship('User')
 
     def __repr__(self):
+        """Return a string representation of the Comment."""
         return f"<Comment(id={self.id}, entry_id={self.entry_id}, user_id={self.user_id})>"
 
     @classmethod
     def from_dict(cls, data):
+        """Create a Comment instance from a dictionary."""
         return cls(
             id=data.get('id'),
             entry_id=data.get('entry_id'),
@@ -102,6 +116,7 @@ class Comment(Base):
         )
 
     def to_dict(self):
+        """Convert the Comment instance to a dictionary."""
         return {
             'id': self.id,
             'entry_id': self.entry_id,
@@ -112,6 +127,8 @@ class Comment(Base):
         }
 
 class EditHistory(Base):
+    """ORM model for an edit history entry."""
+
     __tablename__ = 'edit_history'
 
     id = Column(Integer, primary_key=True)
@@ -122,10 +139,12 @@ class EditHistory(Base):
     entry = relationship('Entry', back_populates='edit_history')
 
     def __repr__(self):
+        """Return a string representation of the EditHistory."""
         return f"<EditHistory(id={self.id}, entry_id={self.entry_id})>"
 
     @classmethod
     def from_dict(cls, data):
+        """Create an EditHistory instance from a dictionary."""
         return cls(
             id=data.get('id'),
             entry_id=data.get('entry_id'),
@@ -134,6 +153,7 @@ class EditHistory(Base):
         )
 
     def to_dict(self):
+        """Convert the EditHistory instance to a dictionary."""
         return {
             'id': self.id,
             'entry_id': self.entry_id,
