@@ -2,7 +2,7 @@
   {
     "id": 1,
     "username": "testuser",
-    "email": "updated@example.com",
+    "email": "testuser@example.com",
     "registered_at": null
   }
 ]

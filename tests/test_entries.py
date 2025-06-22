@@ -156,5 +156,50 @@ class EntriesTestCase(unittest.TestCase):
         data = response.get_json()
         self.assertEqual(data['id'], 1)
 
+    def test_create_entry_missing_data(self):
+        response = self.client.post('/entries', json={}, headers=self.auth_header)
+        self.assertEqual(response.status_code, 400)
+
+    def test_update_entry_missing_data(self):
+        self.test_create_entry()
+        response = self.client.put('/entries/1', json={}, headers=self.auth_header)
+        self.assertEqual(response.status_code, 400)  # should return 400 for empty update data
+
+    def test_update_entry_nonexistent(self):
+        response = self.client.put('/entries/9999', json={
+            'title': 'Nonexistent',
+            'content': 'Nonexistent content'
+        }, headers=self.auth_header)
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_entry_nonexistent(self):
+        response = self.client.delete('/entries/9999', headers=self.auth_header)
+        self.assertEqual(response.status_code, 404)
+
+    def test_add_comment_missing_data(self):
+        self.test_create_entry()
+        response = self.client.post('/entries/1/comments', json={}, headers=self.auth_header)
+        self.assertEqual(response.status_code, 400)
+
+    def test_update_comment_missing_data(self):
+        comment_id = self._add_comment()
+        response = self.client.put(f'/entries/comments/{comment_id}', json={}, headers=self.auth_header)
+        self.assertEqual(response.status_code, 400)
+
+    def test_update_comment_nonexistent(self):
+        response = self.client.put('/entries/comments/9999', json={
+            'content': 'Nonexistent comment'
+        }, headers=self.auth_header)
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_comment_nonexistent(self):
+        response = self.client.delete('/entries/comments/9999', headers=self.auth_header)
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_edit_history_item_nonexistent(self):
+        self.test_create_entry()
+        response = self.client.get('/entries/1/edit_history/9999', headers=self.auth_header)
+        self.assertEqual(response.status_code, 404)
+
 if __name__ == '__main__':
     unittest.main()

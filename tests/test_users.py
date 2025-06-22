@@ -87,5 +87,35 @@ class UsersTestCase(unittest.TestCase):
         response = self.client.delete(f'/users/{user_id}', headers=auth_header)
         self.assertEqual(response.status_code, 204)
 
+    def test_update_user_duplicate_username(self):
+        # Register another user
+        self.client.post('/users/register', json={
+            'username': 'otheruser',
+            'email': 'otheruser@example.com',
+            'password': 'password'
+        })
+        # Get user id of testuser
+        users_resp = self.client.get('/users', headers=self.auth_header)
+        user_id = users_resp.get_json()['items'][0]['id']
+        # Attempt to update testuser's username to otheruser (duplicate)
+        response = self.client.put(f'/users/{user_id}', json={
+            'username': 'otheruser'
+        }, headers=self.auth_header)
+        self.assertEqual(response.status_code, 400)
+
+    def test_update_user_nonexistent(self):
+        response = self.client.put('/users/9999', json={
+            'email': 'nonexistent@example.com'
+        }, headers=self.auth_header)
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_user_nonexistent(self):
+        response = self.client.delete('/users/9999', headers=self.auth_header)
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_user_nonexistent(self):
+        response = self.client.get('/users/9999', headers=self.auth_header)
+        self.assertEqual(response.status_code, 404)
+
 if __name__ == '__main__':
     unittest.main()
