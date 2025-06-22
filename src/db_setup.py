@@ -3,7 +3,7 @@
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from models_orm import Base, User, Entry, Comment, EditHistory
+from .models_orm import Base, User, Entry, Comment, EditHistory
 from datetime import datetime
 
 DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///pwp_db.sqlite3')

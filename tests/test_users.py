@@ -117,5 +117,93 @@ class UsersTestCase(unittest.TestCase):
         response = self.client.get('/users/9999', headers=self.auth_header)
         self.assertEqual(response.status_code, 404)
 
+    def test_get_users_unauthorized(self):
+        response = self.client.get('/users')
+        self.assertEqual(response.status_code, 401)
+
+    def test_register_duplicate_username(self):
+        self.test_register_user()
+        response = self.client.post('/users/register', json={
+            'username': 'testuser',
+            'email': 'newemail@example.com'
+        })
+        self.assertEqual(response.status_code, 400)
+
+    def test_register_duplicate_email(self):
+        self.test_register_user()
+        response = self.client.post('/users/register', json={
+            'username': 'newuser',
+            'email': 'test@example.com'
+        })
+        self.assertEqual(response.status_code, 400)
+
+    def test_update_user_duplicate_username(self):
+        # Register first user
+        response1 = self.client.post('/users/register', json={
+            'username': 'user1',
+            'email': 'user1@example.com'
+        })
+        if response1.status_code not in (201, 400):
+            self.fail(f"Unexpected status code {response1.status_code} in test_update_user_duplicate_username")
+        user1_id = None
+        if response1.status_code == 201:
+            user1_id = response1.get_json().get('id')
+        # Register second user
+        response2 = self.client.post('/users/register', json={
+            'username': 'user2',
+            'email': 'user2@example.com'
+        })
+        if response2.status_code not in (201, 400):
+            self.fail(f"Unexpected status code {response2.status_code} in test_update_user_duplicate_username")
+        user2_id = None
+        if response2.status_code == 201:
+            user2_id = response2.get_json().get('id')
+        # Attempt to update second user to have first user's username
+        if user2_id is None or user1_id is None:
+            self.skipTest("User IDs not available for update test")
+        response = self.client.put(f'/users/{user2_id}', json={
+            'username': 'user1'
+        }, headers=self.auth_header)
+        self.assertEqual(response.status_code, 400)
+
+    def test_update_user_duplicate_email(self):
+        # Register first user
+        response1 = self.client.post('/users/register', json={
+            'username': 'user1',
+            'email': 'user1@example.com'
+        })
+        if response1.status_code not in (201, 400):
+            self.fail(f"Unexpected status code {response1.status_code} in test_update_user_duplicate_email")
+        user1_id = None
+        if response1.status_code == 201:
+            user1_id = response1.get_json().get('id')
+        # Register second user
+        response2 = self.client.post('/users/register', json={
+            'username': 'user2',
+            'email': 'user2@example.com'
+        })
+        if response2.status_code not in (201, 400):
+            self.fail(f"Unexpected status code {response2.status_code} in test_update_user_duplicate_email")
+        user2_id = None
+        if response2.status_code == 201:
+            user2_id = response2.get_json().get('id')
+        # Attempt to update second user to have first user's email
+        if user2_id is None or user1_id is None:
+            self.skipTest("User IDs not available for update test")
+        response = self.client.put(f'/users/{user2_id}', json={
+            'email': 'user1@example.com'
+        }, headers=self.auth_header)
+        self.assertEqual(response.status_code, 400)
+
+    def test_update_user_not_found(self):
+        response = self.client.put('/users/9999', json={
+            'username': 'nonexistent'
+        }, headers=self.auth_header)
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_user_not_found(self):
+        response = self.client.delete('/users/9999', headers=self.auth_header)
+        self.assertEqual(response.status_code, 404)
+
 if __name__ == '__main__':
     unittest.main()

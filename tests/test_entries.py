@@ -254,5 +254,25 @@ class EntriesTestCase(unittest.TestCase):
         response = self.client.delete('/entries/comments/9999', headers=self.auth_header)
         self.assertEqual(response.status_code, 404)
 
+    def test_update_entry_with_changes_creates_edit_history(self):
+        self.test_create_entry()
+        response = self.client.put('/entries/1', json={'title': 'Updated Title'}, headers=self.auth_header)
+        self.assertEqual(response.status_code, 200)
+        # Check that edit history was created
+        response = self.client.get('/entries/1/edit_history', headers=self.auth_header)
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(any('title' in edit['changes'] for edit in data['items']))
+
+    def test_add_comment_validation_error(self):
+        self.test_create_entry()
+        response = self.client.post('/entries/1/comments', json={'user_id': None}, headers=self.auth_header)
+        self.assertEqual(response.status_code, 400)
+
+    def test_update_comment_validation_error(self):
+        comment_id = self._add_comment()
+        response = self.client.put(f'/entries/comments/{comment_id}', json={'content': None}, headers=self.auth_header)
+        self.assertEqual(response.status_code, 400)
+
 if __name__ == '__main__':
     unittest.main()

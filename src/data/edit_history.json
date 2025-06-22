@@ -1,1 +1,13 @@
-[]
+[
+  {
+    "id": 1,
+    "entry_id": 1,
+    "edited_at": null,
+    "changes": {
+      "title": {
+        "old": "Test Entry",
+        "new": "Updated Title"
+      }
+    }
+  }
+]
