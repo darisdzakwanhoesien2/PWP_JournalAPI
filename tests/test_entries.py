@@ -201,5 +201,58 @@ class EntriesTestCase(unittest.TestCase):
         response = self.client.get('/entries/1/edit_history/9999', headers=self.auth_header)
         self.assertEqual(response.status_code, 404)
 
+    def test_get_entries_empty(self):
+        # Clear entries and test get_entries returns empty list
+        from src.data_store import save_entries
+        save_entries([])
+        response = self.client.get('/entries', headers=self.auth_header)
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertIn('items', data)
+        self.assertEqual(len(data['items']), 0)
+
+    def test_create_entry_invalid_data(self):
+        # Missing required fields
+        response = self.client.post('/entries', json={'user_id': None}, headers=self.auth_header)
+        self.assertEqual(response.status_code, 400)
+
+    def test_get_entry_not_found(self):
+        response = self.client.get('/entries/9999', headers=self.auth_header)
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_entry_no_changes(self):
+        self.test_create_entry()
+        response = self.client.put('/entries/1', json={'title': 'Test', 'content': 'Content'}, headers=self.auth_header)
+        self.assertEqual(response.status_code, 200)
+
+    def test_delete_entry_not_found(self):
+        response = self.client.delete('/entries/9999', headers=self.auth_header)
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_entries_by_user_no_entries(self):
+        response = self.client.get('/entries/user/9999', headers=self.auth_header)
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertIn('items', data)
+        self.assertEqual(len(data['items']), 0)
+
+    def test_add_comment_invalid_data(self):
+        self.test_create_entry()
+        response = self.client.post('/entries/1/comments', json={'user_id': None}, headers=self.auth_header)
+        self.assertEqual(response.status_code, 400)
+
+    def test_get_comment_not_found(self):
+        response = self.client.get('/entries/comments/9999', headers=self.auth_header)
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_comment_no_content(self):
+        comment_id = self._add_comment()
+        response = self.client.put(f'/entries/comments/{comment_id}', json={'content': 'Comment'}, headers=self.auth_header)
+        self.assertEqual(response.status_code, 200)
+
+    def test_delete_comment_not_found(self):
+        response = self.client.delete('/entries/comments/9999', headers=self.auth_header)
+        self.assertEqual(response.status_code, 404)
+
 if __name__ == '__main__':
     unittest.main()
