@@ -253,6 +253,8 @@ def update_comment(comment_id):
     except ValidationError as err:
         logging.error("Validation error in update_comment: %s", err.messages)
         return jsonify(err.messages), 400
+    if 'content' not in data:
+        return jsonify({"content": ["Missing data for required field."]}), 400
     comments_data = load_comments()
     logging.info("Updating comment with id %s (type %s), current comments IDs: %s", comment_id, type(comment_id), [c['id'] for c in comments_data])
     comment_index = next((i for i, c in enumerate(comments_data) if c['id'] == comment_id), None)

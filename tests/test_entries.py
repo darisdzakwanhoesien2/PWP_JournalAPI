@@ -274,5 +274,65 @@ class EntriesTestCase(unittest.TestCase):
         response = self.client.put(f'/entries/comments/{comment_id}', json={'content': None}, headers=self.auth_header)
         self.assertEqual(response.status_code, 400)
 
+    def test_create_entry_no_input(self):
+        response = self.client.post('/entries', json={}, headers=self.auth_header)
+        self.assertEqual(response.status_code, 400)
+
+    def test_get_entry_not_found(self):
+        response = self.client.get('/entries/9999', headers=self.auth_header)
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_entry_no_input(self):
+        response = self.client.put('/entries/1', json={}, headers=self.auth_header)
+        self.assertEqual(response.status_code, 400)
+
+    def test_update_entry_not_found(self):
+        response = self.client.put('/entries/9999', json={'title': 'New'}, headers=self.auth_header)
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_entry_not_found(self):
+        response = self.client.delete('/entries/9999', headers=self.auth_header)
+        self.assertEqual(response.status_code, 404)
+
+    def test_add_comment_no_input(self):
+        response = self.client.post('/entries/1/comments', json={}, headers=self.auth_header)
+        self.assertEqual(response.status_code, 400)
+
+    def test_add_comment_validation_error(self):
+        response = self.client.post('/entries/1/comments', json={'user_id': 1}, headers=self.auth_header)
+        self.assertEqual(response.status_code, 400)
+
+    def test_get_comment_not_found(self):
+        response = self.client.get('/comments/9999', headers=self.auth_header)
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_comment_no_input(self):
+        # Add a comment first to update
+        comment_response = self.client.post('/entries/1/comments', json={'user_id': 1, 'content': 'Test'}, headers=self.auth_header)
+        self.assertEqual(comment_response.status_code, 201)
+        comment_id = comment_response.get_json()['id']
+        response = self.client.put(f'/entries/comments/{comment_id}', json={}, headers=self.auth_header)
+        self.assertEqual(response.status_code, 400)
+
+    def test_update_comment_validation_error(self):
+        # Add a comment first to update
+        comment_response = self.client.post('/entries/1/comments', json={'user_id': 1, 'content': 'Test'}, headers=self.auth_header)
+        self.assertEqual(comment_response.status_code, 201)
+        comment_id = comment_response.get_json()['id']
+        response = self.client.put(f'/entries/comments/{comment_id}', json={'user_id': 1}, headers=self.auth_header)
+        self.assertEqual(response.status_code, 400)
+
+    def test_update_comment_not_found(self):
+        response = self.client.put('/comments/9999', json={'content': 'Updated'}, headers=self.auth_header)
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_comment_not_found(self):
+        response = self.client.delete('/comments/9999', headers=self.auth_header)
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_edit_history_item_not_found(self):
+        response = self.client.get('/entries/1/edit_history/9999', headers=self.auth_header)
+        self.assertEqual(response.status_code, 404)
+
 if __name__ == '__main__':
     unittest.main()
