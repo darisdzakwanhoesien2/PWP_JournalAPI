@@ -1,17 +1,15 @@
 ## current code
 """Main application factory and setup for the Flask API."""
 
-"""Main application factory and setup for the Flask API."""
-
 from flask import Flask, request, jsonify
 from flask_jwt_extended import JWTManager, create_access_token
 from flask_caching import Cache
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
-from src import routes_users
-from src import routes_entries
-from src import cache
-from src import models_orm
+from . import routes_users
+from . import routes_entries
+from . import cache
+from . import models_orm
 
 def create_app():
     """Create and configure the Flask application."""

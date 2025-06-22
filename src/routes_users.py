@@ -4,11 +4,12 @@
 from flask import Blueprint, request, jsonify, abort
 from flask_jwt_extended import jwt_required
 from marshmallow import ValidationError
-from src import data_store
-from src import models_orm
-from src import utils
-from src import schemas
-from src import cache
+from . import data_store
+from . import models_orm
+from . import utils
+from . import schemas
+
+from . import cache
 
 users_bp = Blueprint('users', __name__)
 user_schema = schemas.UserSchema()
