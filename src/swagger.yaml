@@ -1,0 +1,77 @@
+openapi: 3.0.0
+info:
+  title: PWP API
+  version: 1.0.0
+servers:
+  - url: http://localhost:5000
+paths:
+  /login:
+    post:
+      summary: Login to get JWT token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+              required:
+                - username
+      responses:
+        '200':
+          description: JWT access token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+        '400':
+          description: Missing username parameter
+  /users/register:
+    post:
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                email:
+                  type: string
+              required:
+                - username
+                - email
+      responses:
+        '201':
+          description: User created
+        '400':
+          description: Invalid input or duplicate username/email
+  /users:
+    get:
+      summary: Get list of users
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of users
+  /entries:
+    get:
+      summary: Get list of entries
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of entries
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

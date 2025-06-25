@@ -1,0 +1,37 @@
+%% Use Case Diagram for Client Application
+usecaseDiagram
+    actor User
+    User --> (Login)
+    User --> (Get Entries)
+    User --> (Logout)
+    User --> (Exit)
+
+%% GUI Layout Diagram for Client Application
+graph TD
+    A[Command Line Interface] --> B[Login Prompt]
+    A --> C[Entries Display]
+    A --> D[Logout Confirmation]
+    A --> E[Exit Confirmation]
+
+%% Screen Workflow Diagram for Client Application
+stateDiagram-v2
+    [*] --> CommandPrompt
+    CommandPrompt --> LoginPrompt: login command
+    CommandPrompt --> EntriesDisplay: entries command
+    CommandPrompt --> Logout: logout command
+    CommandPrompt --> Exit: exit command
+    LoginPrompt --> CommandPrompt: successful login
+    LoginPrompt --> CommandPrompt: failed login
+    EntriesDisplay --> CommandPrompt
+    Logout --> CommandPrompt
+    Exit --> [*]
+
+%% Communication Diagram for Auxiliary Service (Placeholder)
+sequenceDiagram
+    participant Client
+    participant API
+    participant AuxiliaryService
+    Client->>API: Requests data
+    API->>AuxiliaryService: Requests processing
+    AuxiliaryService-->>API: Returns processed data
+    API-->>Client: Returns response

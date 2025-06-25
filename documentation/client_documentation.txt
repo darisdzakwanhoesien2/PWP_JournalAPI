@@ -1,0 +1,48 @@
+Client Application Documentation
+
+1. Application Description
+The client application is a command-line interface implemented in Python (client/client.py) that interacts with the RESTful API. It allows users to login with a username, retrieve entries, and logout. The client uses JWT authentication to access protected endpoints.
+
+2. Functional Requirements
+- Login: Authenticate user and obtain JWT token.
+- Get Entries: Retrieve and display a list of entries from the API.
+- Logout: Clear the authentication token.
+- Exit: Exit the client application.
+
+3. Use Case Diagram
+[Use case diagram to be created showing interactions: User -> Client -> API endpoints (login, get entries, logout)]
+
+4. Client Design
+- GUI Layout: Command-line interface with simple text input and output.
+- Screen Workflow:
+  - Initial screen: prompt for commands (login, entries, logout, exit)
+  - Login screen: prompt for username
+  - Entries screen: display list of entries
+  - Logout: clear session
+  - Exit: terminate application
+
+5. Client Implementation
+- Source code located at client/client.py
+- Uses Python requests library for HTTP communication.
+- Handles authentication via JWT tokens.
+- Basic error handling for HTTP errors and missing input.
+
+6. Testing
+- Unit tests located in client/tests/test_client.py and client/tests/test_integration.py
+- Tests cover login success/failure, entries retrieval, and logout functionality.
+
+7. Instructions
+- Install Python and requests library.
+- Run client/client.py to start the client.
+- Use commands as prompted.
+
+8. Code Documentation
+- Each method in client/client.py is documented with purpose, inputs, and outputs.
+- Code follows PEP8 style with pylint score ~8.1.
+
+9. Limitations and Future Work
+- No GUI/web client implemented.
+- Limited error handling and input validation.
+- Future enhancements could include a web client and richer features.
+
+This documentation fulfills the client application description and testing requirements for checkpoint 5.

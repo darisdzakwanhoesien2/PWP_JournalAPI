@@ -1,0 +1,543 @@
+openapi: 3.0.0
+info:
+  title: PWP API
+  version: 1.0.0
+servers:
+  - url: http://localhost:5000
+paths:
+  /login:
+    post:
+      summary: Login to get JWT token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+              required:
+                - username
+      responses:
+        '200':
+          description: JWT access token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+        '400':
+          description: Missing username parameter
+  /users/register:
+    post:
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                email:
+                  type: string
+              required:
+                - username
+                - email
+      responses:
+        '201':
+          description: User created
+        '400':
+          description: Invalid input or duplicate username/email
+  /users:
+    get:
+      summary: Get list of users
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  _links:
+                    type: object
+                    description: Hypermedia links for users collection
+  /users/{user_id}:
+    get:
+      summary: Get user by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+    put:
+      summary: Update user by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+      responses:
+        '200':
+          description: Updated user details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid input or duplicate username/email
+        '404':
+          description: User not found
+    delete:
+      summary: Delete user by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: User deleted
+        '404':
+          description: User not found
+  /entries:
+    get:
+      summary: Get list of entries
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Entry'
+                  _links:
+                    type: object
+                    description: Hypermedia links for entries collection
+    post:
+      summary: Create a new entry
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntryCreate'
+      responses:
+        '201':
+          description: Entry created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entry'
+        '400':
+          description: Invalid input
+  /entries/{entry_id}:
+    get:
+      summary: Get entry by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Entry details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entry'
+        '404':
+          description: Entry not found
+    put:
+      summary: Update entry by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntryUpdate'
+      responses:
+        '200':
+          description: Updated entry details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entry'
+        '400':
+          description: Invalid input
+        '404':
+          description: Entry not found
+    delete:
+      summary: Delete entry by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Entry deleted
+        '404':
+          description: Entry not found
+  /entries/user/{user_id}:
+    get:
+      summary: Get entries by user ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of entries by user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Entry'
+                  _links:
+                    type: object
+                    description: Hypermedia links for entries collection filtered by user
+  /entries/{entry_id}/comments:
+    get:
+      summary: Get comments for an entry
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of comments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Comment'
+                  _links:
+                    type: object
+                    description: Hypermedia links for comments collection
+    post:
+      summary: Add a comment to an entry
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentCreate'
+      responses:
+        '201':
+          description: Comment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        '400':
+          description: Invalid input
+  /comments/{comment_id}:
+    get:
+      summary: Get comment by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: comment_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Comment details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        '404':
+          description: Comment not found
+    put:
+      summary: Update comment by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: comment_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentUpdate'
+      responses:
+        '200':
+          description: Updated comment details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        '400':
+          description: Invalid input
+        '404':
+          description: Comment not found
+    delete:
+      summary: Delete comment by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: comment_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Comment deleted
+        '404':
+          description: Comment not found
+  /entries/{entry_id}/edit_history:
+    get:
+      summary: Get edit history for an entry
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of edit history items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EditHistory'
+                  _links:
+                    type: object
+                    description: Hypermedia links for edit history collection
+  /entries/{entry_id}/edit_history/{edit_id}:
+    get:
+      summary: Get edit history item by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: edit_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Edit history item details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EditHistory'
+        '404':
+          description: Edit history item not found
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+        _links:
+          type: object
+          description: Hypermedia links for user resource
+    UserUpdate:
+      type: object
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+    Entry:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        title:
+          type: string
+        content:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+        _links:
+          type: object
+          description: Hypermedia links for entry resource
+    EntryCreate:
+      type: object
+      required:
+        - user_id
+        - title
+        - content
+      properties:
+        user_id:
+          type: integer
+        title:
+          type: string
+        content:
+          type: string
+    EntryUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+    Comment:
+      type: object
+      properties:
+        id:
+          type: integer
+        entry_id:
+          type: integer
+        user_id:
+          type: integer
+        content:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+        _links:
+          type: object
+          description: Hypermedia links for comment resource
+    CommentCreate:
+      type: object
+      required:
+        - user_id
+        - content
+      properties:
+        user_id:
+          type: integer
+        content:
+          type: string
+    CommentUpdate:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+    EditHistory:
+      type: object
+      properties:
+        id:
+          type: integer
+        entry_id:
+          type: integer
+        changes:
+          type: object
+        _links:
+          type: object
+          description: Hypermedia links for edit history resource

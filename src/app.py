@@ -6,6 +6,7 @@ from flask_jwt_extended import JWTManager, create_access_token
 from flask_caching import Cache
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
+from flask_swagger_ui import get_swaggerui_blueprint
 from . import routes_users
 from . import routes_entries
 from . import cache
@@ -33,6 +34,23 @@ def create_app():
 
     app.register_blueprint(routes_users.users_bp, url_prefix='/users')
     app.register_blueprint(routes_entries.entries_bp, url_prefix='/entries')
+
+    ### Swagger UI setup ###
+    SWAGGER_URL = '/apidocs'
+    API_URL = '/swagger.yaml'
+    from flask import send_from_directory
+    swaggerui_blueprint = get_swaggerui_blueprint(
+        SWAGGER_URL,
+        API_URL,
+        config={
+            'app_name': "PWP API"
+        }
+    )
+    app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
+
+    @app.route('/swagger.yaml')
+    def swagger_yaml():
+        return send_from_directory('.', 'src/swagger.yaml')
 
     @app.teardown_appcontext
     def remove_session(exception=None):

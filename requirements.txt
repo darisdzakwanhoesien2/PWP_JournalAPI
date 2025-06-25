@@ -7,3 +7,5 @@ sqlalchemy
 pytest
 pylint
 pytest-cov
+requests
+flask-swagger-ui
