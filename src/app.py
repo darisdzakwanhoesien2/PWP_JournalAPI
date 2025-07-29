@@ -37,7 +37,7 @@ def create_app():
 
     ### Swagger UI setup ###
     SWAGGER_URL = '/apidocs'
-    API_URL = '/swagger.yaml'
+    API_URL = '/swagger_updated.yaml'
     from flask import send_from_directory
     swaggerui_blueprint = get_swaggerui_blueprint(
         SWAGGER_URL,
@@ -48,9 +48,10 @@ def create_app():
     )
     app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
 
-    @app.route('/swagger.yaml')
+    @app.route('/swagger_updated.yaml')
     def swagger_yaml():
-        return send_from_directory('.', 'src/swagger.yaml')
+        return send_from_directory('.', 'swagger_updated.yaml')
+
 
     @app.teardown_appcontext
     def remove_session(exception=None):
