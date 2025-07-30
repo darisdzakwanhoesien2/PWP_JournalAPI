@@ -49,7 +49,7 @@ def create_app():
 
     @app.route('/swagger_updated.yaml')
     def swagger_yaml():
-        return send_from_directory('.', 'src/swagger_updated.yaml')
+        return send_from_directory('.', 'swagger_updated.yaml')
 
     @app.teardown_appcontext
     def remove_session(exception=None):
