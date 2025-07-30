@@ -1,4 +1,3 @@
-## current code
 """Main application factory and setup for the Flask API."""
 
 from flask import Flask, request, jsonify
@@ -37,7 +36,7 @@ def create_app():
 
     ### Swagger UI setup ###
     SWAGGER_URL = '/apidocs'
-    API_URL = '/swagger_updated.yaml'
+    API_URL = '/swagger.yaml'
     from flask import send_from_directory
     swaggerui_blueprint = get_swaggerui_blueprint(
         SWAGGER_URL,
@@ -48,10 +47,9 @@ def create_app():
     )
     app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
 
-    @app.route('/swagger_updated.yaml')
+    @app.route('/swagger.yaml')
     def swagger_yaml():
-        return send_from_directory('.', 'swagger_updated.yaml')
-
+        return send_from_directory('.', 'src/swagger.yaml')
 
     @app.teardown_appcontext
     def remove_session(exception=None):
@@ -71,6 +69,8 @@ def create_app():
 
     return app
 
+# Create the app instance for Gunicorn
+app = create_app()
+
 if __name__ == '__main__':
-    app = create_app()
     app.run(debug=True, host='0.0.0.0', port=5000)
